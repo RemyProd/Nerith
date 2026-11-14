@@ -84,6 +84,12 @@ Pour lancer un programme PowerPC écrit en texte (option `--ppc`, qui se combine
 .\build\Debug\nerith.exe --ppc examples\factorielle_recursive_ppc.s
 ```
 
+Pour afficher l'en-tête d'un fichier `.xex` (Xbox 360) que tu possèdes, sans le déchiffrer ni le décompresser :
+
+```powershell
+.\build\Debug\nerith.exe --xex chemin\vers\fichier.xex
+```
+
 Avec `--verbose`, il affiche aussi des messages de diagnostic (lecture du fichier, assemblage, fin de l'exécution). Les deux options se combinent. Sans argument, `nerith.exe` exécute un programme de démonstration. Le dossier `build/` est ignoré par Git. Pour l'instant, le programme assemble un programme écrit en texte, par exemple une boucle qui additionne 5 + 4 + 3 + 2 + 1, l'affiche en clair, l'exécute sur un CPU pédagogique à 4 registres et affiche le résultat. Ça sert d'exercice avant le vrai CPU PowerPC.
 
 ## Structure du dépôt
@@ -94,6 +100,7 @@ include/nerith/   en-têtes publics, un sous-dossier par module :
                     memory/  mémoire de l'émulateur
                     toy/     CPU pédagogique, assembleur, désassembleur
                     ppc/     CPU PowerPC : décodeur, désassembleur, assembleur, interpréteur
+                    xex/     lecture de l'en-tête des fichiers XEX (exécutables Xbox 360)
 src/              code des modules (même découpage) et programme principal (main.cpp)
 tests/            tests automatiques
 examples/         programmes d'exemple : .asm (CPU pédagogique) et .s (PowerPC)

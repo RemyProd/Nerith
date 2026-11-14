@@ -16,6 +16,7 @@
 #include "nerith/toy/disassembler.h"
 #include "nerith/util/file.h"
 #include "nerith/util/log.h"
+#include "nerith/xex/header.h"
 
 namespace {
 
@@ -168,12 +169,35 @@ int run_ppc(const char* path, bool trace) {
     return 1;
 }
 
+// --- Mode XEX (option --xex) ---
+
+// Affiche l'en-tete d'un fichier .xex. Ne lit que les premiers octets : rien n'est dechiffre ni decompresse.
+int run_xex(const char* path) {
+    if (path == nullptr) {
+        std::cerr << "Usage : nerith --xex fichier.xex\n";
+        return 2;
+    }
+    try {
+        const std::size_t kMaxHeaderBytes = 65536;   // l'en-tete et la liste des en-tetes optionnels tiennent dedans
+        const std::vector<std::uint8_t> bytes = nerith::read_binary_file(path, kMaxHeaderBytes);
+        nerith::log_info("lu : " + std::to_string(bytes.size()) + " octets du debut du fichier");
+        std::cout << nerith::xex::describe(nerith::xex::parse_header(bytes));
+        return 0;
+    } catch (const nerith::xex::XexError& error) {
+        nerith::log_error(std::string("Erreur XEX : ") + error.what());
+    } catch (const std::exception& error) {
+        nerith::log_error(std::string("Erreur : ") + error.what());
+    }
+    return 1;
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
-    // arguments : [--ppc] [--trace] [--verbose] [programme]
+    // arguments : [--ppc | --xex] [--trace] [--verbose] [fichier]
     bool trace = false;
     bool ppc = false;
+    bool xex = false;
     const char* path = nullptr;
     for (int i = 1; i < argc; i++) {
         const std::string argument = argv[i];
@@ -181,16 +205,25 @@ int main(int argc, char* argv[]) {
             trace = true;
         } else if (argument == "--ppc") {
             ppc = true;
+        } else if (argument == "--xex") {
+            xex = true;
         } else if (argument == "--verbose") {
             nerith::set_log_level(nerith::LogLevel::Debug);
         } else if (path == nullptr && argument.rfind("--", 0) != 0) {
             path = argv[i];
         } else {
-            std::cerr << "Usage : nerith [--ppc] [--trace] [--verbose] [programme]\n";
+            std::cerr << "Usage : nerith [--ppc | --xex] [--trace] [--verbose] [fichier]\n";
             return 2;
         }
     }
 
+    if (ppc && xex) {
+        std::cerr << "Usage : --ppc et --xex ne se combinent pas\n";
+        return 2;
+    }
+    if (xex) {
+        return run_xex(path);
+    }
     if (ppc) {
         return run_ppc(path, trace);
     }

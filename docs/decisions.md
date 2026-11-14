@@ -13,7 +13,7 @@ Conserver les décisions importantes et leur justification. Ne pas effacer une a
 | D-003 | Build | Retenue | CMake |
 | D-004 | Dépôt | Retenue | GitHub public |
 | D-005 | Nom | Provisoire | Nerith (remplace Project Xenon) |
-| D-006 | Architecture | En cours | Modules indépendants ; découpage en D-012 et D-013 |
+| D-006 | Architecture | En cours | Modules indépendants ; découpage en D-012, D-013 et D-014 |
 | D-007 | Kernel cible | À étudier | Architecture multi-version ; le dernier kernel ne garantit pas tous les jeux |
 | D-008 | API graphique | À étudier | Décider après recherche et prototype |
 | D-009 | Licence | Provisoire | BSD-3-Clause (copyright : RemyProd) |
@@ -21,6 +21,7 @@ Conserver les décisions importantes et leur justification. Ne pas effacer une a
 | D-011 | Logs | Retenue | Petit module maison (`nerith/util/log.h`), sans dépendance |
 | D-012 | Organisation du code | Retenue | Modules `util`, `memory`, `toy` : un sous-dossier et une bibliothèque CMake chacun |
 | D-013 | Module PowerPC | Retenue | Module `ppc` (décodeur, désassembleur, assembleur, interpréteur) dans `nerith::ppc`, qui dépend de `memory` |
+| D-014 | Lecture des fichiers XEX | Retenue | Module `xex` (`nerith::xex`, sans dépendance) : en-tête seulement, aucun déchiffrement ni décompression |
 
 ## Décisions détaillées
 
@@ -91,6 +92,18 @@ Conserver les décisions importantes et leur justification. Ne pas effacer une a
 - **Règles de départ :** un mot inconnu ou une forme pas encore gérée (`Rc = 1`, `OE = 1`, 64 bits...) donne `Unknown` / `InvalidInstruction`, jamais une exécution approximative ; une instruction qui échoue ne modifie rien ; `blr` avec `lr == 0` termine le programme (convention de test, pas le comportement de la console) ; `rA = 0` vaut le nombre 0 dans `addi`, `addis`, `lwz`, `stw`, `lbz`, `stb`.
 - **Vérification :** les encodages sont comparés à `llvm-mc` (assembleur LLVM) pendant le développement ; `llvm-mc` n'est pas une dépendance du dépôt. Le comportement (et pas seulement l'encodage) reste à vérifier avec le manuel PowerPC.
 - **Conséquences :** le test de chaque instruction se fait à trois niveaux (décodage, assemblage, exécution) ; `toy` pourra passer dans `nerith::toy` plus tard ; D-006 reste « en cours ».
+
+
+### D-014 — Module `xex` : lire l'en-tête seulement
+- **Date :** 2026-11-14
+- **État :** retenue, révisable
+- **Contexte :** un jeu Xbox 360 est un fichier XEX : un conteneur autour d'une image PE PowerPC, en général chiffré et compressé. Le dépôt ne contient et ne doit contenir ni jeu, ni clé, ni fichier propriétaire (`docs/conventions.md`).
+- **Options étudiées :** (A) ne rien faire avant d'avoir tranché la question du chiffrement ; (B) lire seulement l'en-tête et la liste des en-têtes optionnels, sans rien déchiffrer ni décompresser ; (C) viser tout de suite le chargement complet.
+- **Décision :** option B. Module `xex` dans le namespace `nerith::xex`, sans dépendance : il lit un tampon d'octets. Seul XEX2 est géré. Les tests utilisent des octets fabriqués à la main. L'option `nerith --xex fichier.xex` affiche l'en-tête d'un fichier donné par l'utilisateur et ne lit que les 64 premiers Kio.
+- **Ce que la décision ne tranche pas :** le chiffrement et la compression du contenu. Cette question de fond (comment travailler sans distribuer de matériel protégé) reste ouverte et doit être décidée avant tout code qui touche au contenu.
+- **Justification :** l'en-tête est la seule partie testable sans fichier de jeu ni clé ; elle suffit à répondre à plusieurs points « à vérifier » de la note de lecture (en-tête lisible sans clé ? tailles des en-têtes optionnels ?).
+- **Points à vérifier :** valeur directe pour les identifiants dont l'octet de poids faible vaut 0x00 (hypothèse retenue pour le point d'entrée) ; sens exact du champ à 0x10 (« informations de sécurité »).
+- **Conséquences :** `value_kind` et les noms des identifiants viennent de Free60 (source auto-qualifiée de spéculative) ; à recouper avant de s'y fier pour charger un programme.
 
 ## Format d'une décision
 

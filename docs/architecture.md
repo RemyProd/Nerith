@@ -58,7 +58,7 @@ Expérience utilisateur. Ce module ne doit pas contenir le cœur de l'émulation
 
 ## Organisation actuelle du code
 
-Le code existant est rangé en quatre modules. Chaque module est une bibliothèque CMake distincte, ce qui force à déclarer les dépendances.
+Le code existant est rangé en cinq modules. Chaque module est une bibliothèque CMake distincte, ce qui force à déclarer les dépendances.
 
 ```text
 include/nerith/<module>/   en-têtes du module
@@ -71,8 +71,9 @@ src/<module>/              code du module
 | `memory` | Classe `Memory` : octets, big-endian, accès vérifiés | rien |
 | `toy` | CPU pédagogique (`cpu.h`), assembleur, désassembleur | `memory` |
 | `ppc` | CPU PowerPC : décodeur, désassembleur, assembleur, interpréteur (`nerith::ppc`) | `memory` |
+| `xex` | Lecture de l'en-tête d'un fichier XEX (exécutable Xbox 360), sans déchiffrement (`nerith::xex`) | rien |
 
-L'exécutable `nerith` (`src/main.cpp`) utilise `toy`, `ppc` et `util` (option `--ppc` pour le PowerPC). Chaque test n'est lié qu'au module qu'il vérifie.
+L'exécutable `nerith` (`src/main.cpp`) utilise `toy`, `ppc`, `xex` et `util` (option `--ppc` pour le PowerPC, option `--xex` pour lire un en-tête XEX). Chaque test n'est lié qu'au module qu'il vérifie.
 
 Règles :
 - Un module ne dépend que des modules plus bas dans le tableau. Pas de dépendance circulaire.
@@ -80,7 +81,7 @@ Règles :
 - `Memory` est partagée : `toy` et `ppc` l'utilisent, sans dépendre l'un de l'autre.
 - Le namespace reste `nerith` pour tous les modules. `ppc` est dans `nerith::ppc`, car ses noms (`Cpu`, `step`, `run`...) sont les mêmes que ceux de `toy` ; `toy` pourra passer dans `nerith::toy` plus tard.
 
-Décisions : D-012 et D-013 dans [Décisions techniques](decisions.md).
+Décisions : D-012, D-013 et D-014 dans [Décisions techniques](decisions.md).
 
 ## Arborescence cible du dépôt
 

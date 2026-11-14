@@ -72,7 +72,7 @@ Voir [Architecture](architecture.md).
 - [ ] Étudier formats et chemins audio.
 
 ## Phase 7 — Chargement et système
-- [ ] Étudier les formats exécutables Xbox 360.
+- [ ] Étudier les formats exécutables Xbox 360. (en-tête XEX2 lu : module `xex`, D-014)
 - [ ] Définir un chargeur de programmes de test.
 - [ ] Étudier appels et services système.
 - [ ] Documenter les versions de kernel.

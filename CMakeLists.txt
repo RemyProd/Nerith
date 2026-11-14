@@ -16,7 +16,7 @@ function(nerith_module name)
 endfunction()
 
 # --- Modules (bibliotheques) ---
-# Dependances : toy -> memory ; ppc -> memory ; util et memory ne dependent de rien.
+# Dependances : toy -> memory ; ppc -> memory ; util, memory et xex ne dependent de rien.
 
 # util : outils generaux (fichiers, logs)
 add_library(nerith_util
@@ -50,9 +50,15 @@ add_library(nerith_ppc
 nerith_module(nerith_ppc)
 target_link_libraries(nerith_ppc PUBLIC nerith_memory)
 
+# xex : le format des executables Xbox 360 ; pour l'instant, seulement la lecture de l'en-tete
+add_library(nerith_xex
+    src/xex/header.cpp
+)
+nerith_module(nerith_xex)
+
 # --- Programme principal ---
 add_executable(nerith src/main.cpp)
-target_link_libraries(nerith PRIVATE nerith_toy nerith_ppc nerith_util)
+target_link_libraries(nerith PRIVATE nerith_toy nerith_ppc nerith_xex nerith_util)
 
 # --- Tests automatises (lances avec : ctest) ---
 enable_testing()
@@ -73,3 +79,4 @@ nerith_test(ppc_decoder  nerith_ppc)
 nerith_test(ppc_disassembler nerith_ppc)
 nerith_test(ppc_cpu          nerith_ppc)
 nerith_test(ppc_assembler    nerith_ppc)
+nerith_test(xex_header       nerith_xex)
