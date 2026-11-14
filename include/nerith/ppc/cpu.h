@@ -13,6 +13,7 @@ struct Cpu {
     std::array<std::uint64_t, 32> gpr{};   // r0 a r31, 64 bits chacun
     std::uint64_t pc = 0;                  // adresse de la prochaine instruction
     std::uint64_t lr = 0;                  // registre de lien : adresse de retour (bl, blr)
+    std::uint64_t ctr = 0;                 // registre compteur : boucles (bdnz) et sauts indirects (bctr)
     std::uint32_t cr = 0;                  // registre de conditions : 8 champs de 4 bits (LT, GT, EQ, SO)
 };
 

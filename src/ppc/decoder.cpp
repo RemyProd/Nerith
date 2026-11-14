@@ -43,8 +43,10 @@ Instruction decode(std::uint32_t word) {
             }
             break;
 
-        case 16:   // bc : seulement beq/bne/blt/bgt/ble/bge, sans AA ni LK
-            if ((word & 0x3) == 0 && (field_6_10(word) == 12 || field_6_10(word) == 4)) {
+        case 16:   // bc : beq/bne/blt/bgt/ble/bge (BO = 12 ou 4) et bdnz/bdz (BO = 16 ou 18, BI = 0), sans AA ni LK
+            if ((word & 0x3) == 0 &&
+                (field_6_10(word) == 12 || field_6_10(word) == 4 ||
+                 ((field_6_10(word) == 16 || field_6_10(word) == 18) && field_11_15(word) == 0))) {
                 result.kind = Kind::Bc;
                 result.bo = field_6_10(word);
                 result.bi = field_11_15(word);
@@ -131,9 +133,13 @@ Instruction decode(std::uint32_t word) {
             break;
         }
 
-        case 19:   // blr : seulement la forme exacte "toujours, sans sauvegarde de LR"
-            if ((word & 0x03FFFFFF) == 0x02800020) {   // BO = 20, BI = 0, XO = 16, LK = 0
+        case 19:   // blr, blrl, bctr, bctrl : seulement les formes "toujours" (BO = 20, BI = 0)
+            if ((word & 0x03FFFFFE) == 0x02800020) {         // XO = 16 : saute a LR
                 result.kind = Kind::Blr;
+                result.link = (word & 0x1) != 0;
+            } else if ((word & 0x03FFFFFE) == 0x02800420) {  // XO = 528 : saute a CTR
+                result.kind = Kind::Bctr;
+                result.link = (word & 0x1) != 0;
             }
             break;
 
@@ -147,16 +153,19 @@ Instruction decode(std::uint32_t word) {
                     case 40:  result.kind = Kind::Sub;   break;
                     case 235: result.kind = Kind::Mullw; break;
                     case 444: result.kind = Kind::Or;    break;
-                    case 339:   // mfspr : seulement LR (numero 8)
-                    case 467:   // mtspr : seulement LR
+                    case 339:   // mfspr : seulement LR (numero 8) et CTR (numero 9)
+                    case 467:   // mtspr : seulement LR et CTR
                         {
                             const std::uint32_t field = (word >> 11) & 0x3FF;   // moities inversees
                             const std::uint32_t spr = ((field & 0x1F) << 5) | (field >> 5);
+                            const bool read = ((word >> 1) & 0x3FF) == 339;
                             if (spr == 8) {
-                                result.kind = ((word >> 1) & 0x3FF) == 339 ? Kind::Mflr : Kind::Mtlr;
-                                result.ra = 0;
-                                result.rb = 0;
+                                result.kind = read ? Kind::Mflr : Kind::Mtlr;
+                            } else if (spr == 9) {
+                                result.kind = read ? Kind::Mfctr : Kind::Mtctr;
                             }
+                            result.ra = 0;
+                            result.rb = 0;
                         }
                         break;
                     case 0:   // cmpw : seulement la forme 32 bits (L = 0)
@@ -244,6 +253,12 @@ std::string to_text(const Instruction& i) {
         case Kind::Mtlr:
             return "mtlr " + reg_name(i.rd);
 
+        case Kind::Mfctr:
+            return "mfctr " + reg_name(i.rd);
+
+        case Kind::Mtctr:
+            return "mtctr " + reg_name(i.rd);
+
         case Kind::Lbz:
             return "lbz " + reg_name(i.rd) + ", " + std::to_string(i.imm) + "(" + reg_name(i.ra) + ")";
 
@@ -284,6 +299,9 @@ std::string to_text(const Instruction& i) {
                    ", " + std::to_string(i.imm);
 
         case Kind::Bc: {
+            if (i.bo == 16 || i.bo == 18) {   // selon CTR, pas selon CR
+                return std::string(i.bo == 16 ? "bdnz " : "bdz ") + signed_offset(i.imm);
+            }
             // bo = 12 : saute si le bit vaut 1 (lt, gt, eq) ; bo = 4 : saute s'il vaut 0 (ge, le, ne)
             static const char* const kTrue[]  = {"blt", "bgt", "beq", "bso"};
             static const char* const kFalse[] = {"bge", "ble", "bne", "bns"};
@@ -295,7 +313,10 @@ std::string to_text(const Instruction& i) {
         }
 
         case Kind::Blr:
-            return "blr";
+            return i.link ? "blrl" : "blr";
+
+        case Kind::Bctr:
+            return i.link ? "bctrl" : "bctr";
 
         case Kind::Unknown:
             break;

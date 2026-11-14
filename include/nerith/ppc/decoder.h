@@ -23,11 +23,14 @@ enum class Kind {
     Stwu,      // stwu rS, d(rA)      (comme stw, puis rA = adresse ecrite : sert a creer une pile)
     Mflr,      // mflr rD             (rD = LR)
     Mtlr,      // mtlr rS             (LR = rS)
+    Mfctr,     // mfctr rD            (rD = CTR, le registre compteur)
+    Mtctr,     // mtctr rS            (CTR = rS)
     Lbz,       // lbz rD, d(rA)       (lire un octet, complete par des 0)
     Stb,       // stb rS, d(rA)       (ecrire un octet : les 8 bits de poids faible de rS)
     B,         // b / bl / ba / bla   (saut ; bl sauvegarde le retour dans LR)
-    Bc,        // saut conditionnel : beq, bne, blt, bgt, ble, bge (selon un bit de CR)
-    Blr,       // blr                 (retour de fonction : saute a LR)
+    Bc,        // saut conditionnel : beq, bne, blt, bgt, ble, bge (selon un bit de CR) ; bdnz, bdz (selon CTR)
+    Blr,       // blr / blrl          (retour de fonction : saute a LR ; blrl sauvegarde ensuite le retour dans LR)
+    Bctr,      // bctr / bctrl        (saut vers l'adresse dans CTR ; bctrl sauvegarde le retour dans LR)
 };
 
 // Le resultat du decodage d'un mot de 32 bits.
@@ -40,12 +43,12 @@ struct Instruction {
     std::uint8_t rb = 0;
     std::int32_t imm = 0;     // valeur immediate (avec signe) ou deplacement du saut, en octets
     bool absolute = false;    // B : bit AA (adresse absolue au lieu de relative)
-    bool link = false;        // B : bit LK (sauvegarde l'adresse de retour dans LR)
+    bool link = false;        // B, Blr, Bctr : bit LK (sauvegarde l'adresse de retour dans LR)
     std::uint8_t sh = 0;      // Rlwinm : rotation a gauche (0 a 31)
     std::uint8_t mb = 0;      // Rlwinm : debut du masque (bit 0 = poids fort des 32 bits)
     std::uint8_t me = 0;      // Rlwinm : fin du masque
     std::uint8_t crf = 0;     // Cmpwi : numero du champ de CR (0 a 7)
-    std::uint8_t bo = 0;      // Bc : 12 = saute si le bit est a 1, 4 = saute si le bit est a 0
+    std::uint8_t bo = 0;      // Bc : 12 = saute si le bit est a 1, 4 = a 0, 16 = bdnz, 18 = bdz
     std::uint8_t bi = 0;      // Bc : numero du bit de CR teste (0 a 31 ; champ = bi / 4)
 };
 

@@ -30,6 +30,7 @@ private:
 //   cmpw r3, r4         cmpw cr1, r3, r4
 //   rlwinm r3, r4, 5, 6, 7   (rotation a gauche de 5, puis masque des bits 6 a 7)
 //   slwi r3, r4, 8   srwi r3, r4, 8   clrlwi r3, r4, 16   clrrwi r3, r4, 4   rotlwi r3, r4, 8
+//   mtctr r3            mfctr r3              bdnz loop     bdz fin     bctr   bctrl   blrl
 //   mflr r0             mtlr r0               stwu r1, -16(r1)    (pile : r1 = r1 - 16, puis ecrit)
 //   lwz r3, 8(r1)       stw r3, 8(r1)         lbz r3, 8(r1)       stb r3, 8(r1)
 //   (r0 entre parentheses = base 0)

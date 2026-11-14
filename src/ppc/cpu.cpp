@@ -147,8 +147,14 @@ Status step(Cpu& cpu, Memory& memory) {
             }
 
             case Kind::Bc: {
-                const bool bit = ((cpu.cr >> (31u - i.bi)) & 1u) != 0;
-                const bool taken = (i.bo == 12) ? bit : !bit;
+                bool taken = false;
+                if (i.bo == 16 || i.bo == 18) {   // bdnz, bdz : on decremente CTR, puis on le teste
+                    cpu.ctr -= 1;
+                    taken = (i.bo == 16) ? (cpu.ctr != 0) : (cpu.ctr == 0);
+                } else {
+                    const bool bit = ((cpu.cr >> (31u - i.bi)) & 1u) != 0;
+                    taken = (i.bo == 12) ? bit : !bit;
+                }
                 cpu.pc = taken ? add_signed(cpu.pc, i.imm) : next;
                 return Status::Running;
             }
@@ -181,11 +187,35 @@ Status step(Cpu& cpu, Memory& memory) {
                 return Status::Running;
             }
 
-            case Kind::Blr:
-                if (cpu.lr == 0) {
+            case Kind::Blr: {
+                if (!i.link && cpu.lr == 0) {
                     return Status::Halted;   // pc reste sur le blr
                 }
-                cpu.pc = cpu.lr;
+                const std::uint64_t target = cpu.lr;
+                if (i.link) {
+                    cpu.lr = next;   // blrl : l'adresse de retour du nouvel appel
+                }
+                cpu.pc = target;
+                return Status::Running;
+            }
+
+            case Kind::Bctr: {
+                const std::uint64_t target = cpu.ctr & ~std::uint64_t{3};
+                if (i.link) {
+                    cpu.lr = next;
+                }
+                cpu.pc = target;
+                return Status::Running;
+            }
+
+            case Kind::Mfctr:
+                cpu.gpr[i.rd] = cpu.ctr;
+                cpu.pc = next;
+                return Status::Running;
+
+            case Kind::Mtctr:
+                cpu.ctr = cpu.gpr[i.rd];
+                cpu.pc = next;
                 return Status::Running;
 
             case Kind::Unknown:

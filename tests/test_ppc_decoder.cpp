@@ -79,7 +79,7 @@ int main() {
     check(text(0x7C0802A6) == "mflr r0", "mflr");
     check(text(0x7D8803A6) == "mtlr r12", "mtlr");
     check(text(0x9421FFF0) == "stwu r1, -16(r1)", "stwu");
-    check(decode(0x7C0902A6).kind == Kind::Unknown, "mfspr d'un autre registre (CTR) pas encore gere");
+    check(decode(0x7C0A02A6).kind == Kind::Unknown, "mfspr d'un autre registre (spr 10) pas encore gere");
 
     // rotation et masque (mots verifies avec llvm-mc)
     check(text(0x5483298E) == "rlwinm r3, r4, 5, 6, 7", "rlwinm general");
@@ -96,11 +96,21 @@ int main() {
     }
     check(decode(0x5483402F).kind == Kind::Unknown, "rlwinm. (Rc = 1) pas encore gere");
 
+    // CTR, boucles et sauts indirects (mots verifies avec llvm-mc)
+    check(text(0x7C6903A6) == "mtctr r3", "mtctr");
+    check(text(0x7C6902A6) == "mfctr r3", "mfctr");
+    check(text(0x4200FFF8) == "bdnz -8", "bdnz");
+    check(text(0x4240000C) == "bdz +12", "bdz");
+    check(text(0x4E800420) == "bctr", "bctr");
+    check(text(0x4E800421) == "bctrl", "bctrl");
+    check(text(0x4E800021) == "blrl", "blrl");
+    check(decode(0x42010008).kind == Kind::Unknown, "bdnz avec BI different de 0 : pas gere");
+    check(decode(0x7C6A02A6).kind == Kind::Unknown, "mfspr d'un autre registre (spr 10) pas gere");
+
     // mots non reconnus : jamais d'exception
     check(decode(0x00000000).kind == Kind::Unknown, "0 : inconnu");
     check(text(0x12345678) == ".long 0x12345678", "texte : inconnu");
     check(decode(0x7C632215).kind == Kind::Unknown, "add. (Rc = 1) pas encore gere");
-    check(decode(0x4E800021).kind == Kind::Unknown, "blrl pas encore gere");
 
     if (failures == 0) {
         std::cout << "Tous les tests du decodeur PowerPC passent\n";

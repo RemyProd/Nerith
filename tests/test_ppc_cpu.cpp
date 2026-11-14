@@ -289,6 +289,64 @@ int main() {
         step(c2, m2);
         check(c2.gpr[3] == 0x1234567810000008ull, "rlwinm : masque qui fait le tour (selon le manuel)");
     }
+    {   // boucle avec CTR : bdnz decremente CTR, puis saute tant qu'il n'est pas 0
+        Memory memory(64);
+        load_words(memory, {
+            0x38600005,   // 00 li r3, 5
+            0x7C6903A6,   // 04 mtctr r3
+            0x38800000,   // 08 li r4, 0
+            0x38840002,   // 0C addi r4, r4, 2
+            0x4200FFFC,   // 10 bdnz -4  (retour a l'adresse 0C)
+            0x4E800020}); // 14 blr
+        Cpu cpu;
+        check(run(cpu, memory, 100) == Status::Halted, "bdnz : se termine");
+        check(cpu.gpr[4] == 10, "bdnz : 5 tours, r4 = 10");
+        check(cpu.ctr == 0, "bdnz : CTR arrive a 0");
+    }
+    {   // bdz saute quand CTR arrive a 0 ; mfctr relit CTR
+        Memory memory(32);
+        load_words(memory, {
+            0x38600001,   // 00 li r3, 1
+            0x7C6903A6,   // 04 mtctr r3
+            0x4240000C,   // 08 bdz +12 (CTR passe de 1 a 0 : on saute a l'adresse 14)
+            0x38A00063,   // 0C li r5, 99 (saute)
+            0x38A00063,   // 10 li r5, 99 (saute)
+            0x7CC902A6}); // 14 mfctr r6
+        Cpu cpu;
+        step(cpu, memory);
+        step(cpu, memory);
+        step(cpu, memory);
+        check(cpu.pc == 0x14 && cpu.ctr == 0, "bdz : CTR 1 -> 0, on saute");
+        step(cpu, memory);
+        check(cpu.gpr[5] == 0 && cpu.gpr[6] == 0, "bdz : instructions sautees, mfctr relit 0");
+    }
+    {   // bctr : saut indirect ; bctrl : appel indirect ; blrl : appel via lr
+        Memory memory(64);
+        memory.write32(0, 0x7CA903A6);    // mtctr r5   (r5 = 0x20)
+        memory.write32(4, 0x4E800421);    // bctrl : saute en 0x20, lr = 8
+        memory.write32(0x20, 0x38600009); // li r3, 9
+        memory.write32(0x24, 0x4E800020); // blr : retourne en 8
+        Cpu cpu;
+        cpu.gpr[5] = 0x20;
+        step(cpu, memory);
+        step(cpu, memory);
+        check(cpu.pc == 0x20 && cpu.lr == 8, "bctrl : saute a CTR et sauvegarde le retour");
+        step(cpu, memory);
+        step(cpu, memory);
+        check(cpu.pc == 8 && cpu.gpr[3] == 9, "retour apres bctrl");
+        Memory m2(32);
+        m2.write32(0, 0x4E800021);   // blrl
+        Cpu c2;
+        c2.lr = 0x10;
+        step(c2, m2);
+        check(c2.pc == 0x10 && c2.lr == 4, "blrl : saute a l'ancien lr, lr = adresse suivante");
+        Memory m3(8);
+        m3.write32(0, 0x4E800420);   // bctr
+        Cpu c3;
+        c3.ctr = 0x1003;   // les 2 bits du bas sont ignores
+        step(c3, m3);
+        check(c3.pc == 0x1000 && c3.lr == 0, "bctr : saut sans toucher lr, 2 bits du bas ignores");
+    }
     {   // erreurs : rien ne change
         Memory memory(8);
         memory.write32(0, 0x12345678);

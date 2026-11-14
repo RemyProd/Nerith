@@ -280,6 +280,25 @@ std::uint32_t encode(const Line& line, const std::map<std::string, std::size_t>&
         expect_operands(line, 0);
         return 0x60000000u;
     }
+    if (m == "mfctr" || m == "mtctr") {
+        expect_operands(line, 1);
+        return (m == "mfctr" ? 0x7C0902A6u : 0x7C0903A6u) | (parse_register(line, op[0]) << 21);
+    }
+    if (m == "bctr" || m == "bctrl" || m == "blrl") {
+        expect_operands(line, 0);
+        return m == "bctr" ? 0x4E800420u : (m == "bctrl" ? 0x4E800421u : 0x4E800021u);
+    }
+    if (m == "bdnz" || m == "bdz") {
+        expect_operands(line, 1);
+        const long long offset = branch_offset(line, op[0], labels);
+        if (offset % 4 != 0) {
+            throw AssemblyError(line.number, "le deplacement d'un saut doit etre un multiple de 4");
+        }
+        if (offset < -32768 || offset > 32764) {
+            throw AssemblyError(line.number, "saut conditionnel trop loin (32 Ko maximum)");
+        }
+        return (16u << 26) | ((m == "bdnz" ? 16u : 18u) << 21) | (static_cast<std::uint32_t>(offset) & 0xFFFCu);
+    }
     if (m == "mflr" || m == "mtlr") {
         expect_operands(line, 1);
         return (m == "mflr" ? 0x7C0802A6u : 0x7C0803A6u) | (parse_register(line, op[0]) << 21);

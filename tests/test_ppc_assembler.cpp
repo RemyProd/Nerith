@@ -111,6 +111,16 @@ int main() {
               "champs de 0x38600005 : opcode 14, rD 3, rA 0, d 5");
     }
 
+    check(one("mtctr r3") == 0x7C6903A6, "mtctr");
+    check(one("mfctr r3") == 0x7C6902A6, "mfctr");
+    check(one("mtctr r31") == 0x7FE903A6, "mtctr r31");
+    check(one("bdnz -8") == 0x4200FFF8, "bdnz");
+    check(one("bdnz +8") == 0x42000008, "bdnz +8");
+    check(one("bdz +12") == 0x4240000C, "bdz");
+    check(one("bctr") == 0x4E800420, "bctr");
+    check(one("bctrl") == 0x4E800421, "bctrl");
+    check(one("blrl") == 0x4E800021, "blrl");
+
     // majuscules, hexadecimal, commentaires
     check(one("LI R3, 0x10 ; commentaire") == 0x38600010, "majuscules, hexa, commentaire");
     check(one("li r3, 5 # autre commentaire") == 0x38600005, "commentaire avec #");
