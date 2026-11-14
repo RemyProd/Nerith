@@ -32,6 +32,21 @@ constexpr OpInfo kOps[] = {
     {Kind::Extsb,   "extsb",   31, 954, Layout::RaRs},
     {Kind::Extsh,   "extsh",   31, 922, Layout::RaRs},
     {Kind::Extsw,   "extsw",   31, 986, Layout::RaRs},
+    // --- retenue : bit CA du registre XER ---
+    {Kind::Addc,    "addc",    31, 10,  Layout::RtRaRb},
+    {Kind::Adde,    "adde",    31, 138, Layout::RtRaRb},
+    {Kind::Subfc,   "subc",    31, 8,   Layout::RtRbRa},   // subfc rD, rA, rB s'ecrit "subc rD, rB, rA"
+    {Kind::Subfe,   "subfe",   31, 136, Layout::RtRaRb},
+    {Kind::Addze,   "addze",   31, 202, Layout::RtRa},
+    {Kind::Addme,   "addme",   31, 234, Layout::RtRa},
+    {Kind::Subfze,  "subfze",  31, 200, Layout::RtRa},
+    {Kind::Subfme,  "subfme",  31, 232, Layout::RtRa},
+    {Kind::Sraw,    "sraw",    31, 792, Layout::RaRsRb},
+    {Kind::Srad,    "srad",    31, 794, Layout::RaRsRb},
+    {Kind::Srawi,   "srawi",   31, 824, Layout::RaRsSh},
+    {Kind::Addic,   "addic",   12, -1,  Layout::RtRaSimm},
+    {Kind::AddicDot,"addic.",  13, -1,  Layout::RtRaSimm},
+    {Kind::Subfic,  "subfic",  8,  -1,  Layout::RtRaSimm},
     // --- nombres de 16 bits ---
     {Kind::Mulli,   "mulli",   7,  -1,  Layout::RtRaSimm},
     {Kind::Oris,    "oris",    25, -1,  Layout::RaRsUimm},

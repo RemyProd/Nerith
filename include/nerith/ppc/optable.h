@@ -18,6 +18,8 @@ enum class Layout {
     RtRaRb,     // name rD, rA, rB
     RaRsRb,     // name rA, rS, rB        (instructions logiques : la destination est rA)
     RaRs,       // name rA, rS            (rB doit valoir 0)
+    RaRsSh,     // name rA, rS, SH       (le champ rB contient le decalage SH, de 0 a 31)
+    RtRbRa,     // name rD, rB, rA        (ordre inverse, comme llvm l'ecrit pour subc)
     RtRa,       // name rD, rA            (rB doit valoir 0)
     RtRaSimm,   // name rD, rA, SIMM      (nombre avec signe, 16 bits)
     RaRsUimm,   // name rA, rS, UIMM      (nombre sans signe, 16 bits)

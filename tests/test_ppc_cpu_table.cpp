@@ -60,6 +60,36 @@ Cpu exec(const std::string& line, Regs regs) {
     return exec(line, regs, memory);
 }
 
+// Pareil, avec une valeur de depart pour XER (par exemple le bit CA deja pose).
+Cpu execx(const std::string& line, Regs regs, std::uint32_t xer) {
+    Memory memory(256);
+    memory.write32(0, nerith::ppc::assemble(line).at(0));
+    Cpu cpu;
+    cpu.xer = xer;
+    for (const auto& [number, value] : regs) {
+        cpu.gpr[static_cast<std::size_t>(number)] = value;
+    }
+    check(nerith::ppc::step(cpu, memory) == Status::Running, line + " : doit s'executer");
+    return cpu;
+}
+
+// Execute plusieurs instructions (le programme se termine par blr).
+Cpu run_program(const std::string& source, Regs regs) {
+    Memory memory(256);
+    const auto words = nerith::ppc::assemble(source + "\nblr\n");
+    for (std::size_t n = 0; n < words.size(); n++) {
+        memory.write32(n * 4, words[n]);
+    }
+    Cpu cpu;
+    for (const auto& [number, value] : regs) {
+        cpu.gpr[static_cast<std::size_t>(number)] = value;
+    }
+    check(nerith::ppc::run(cpu, memory, 1000) == Status::Halted, "programme : doit se terminer");
+    return cpu;
+}
+
+constexpr std::uint32_t kCa = 0x20000000;   // bit CA (retenue) de XER
+
 }  // namespace
 
 int main() {
@@ -288,8 +318,12 @@ int main() {
             switch (op.layout) {
                 case Layout::RtRaRb:
                 case Layout::RaRsRb:
+                case Layout::RtRbRa:
                 case Layout::MemX:
                     word |= 5u << 11;
+                    break;
+                case Layout::RaRsSh:
+                    word |= 3u << 11;
                     break;
                 case Layout::RtRaSimm:
                 case Layout::RaRsUimm:
@@ -316,6 +350,114 @@ int main() {
             cpu.gpr[5] = 0x08;
             check(nerith::ppc::step(cpu, memory) == Status::Running, std::string("table : execution de ") + op.name);
         }
+    }
+
+    // --- retenue (CA) ---
+    {
+        const std::uint64_t all = 0xFFFFFFFFFFFFFFFFull;
+        Cpu c = exec("addic r3, r4, 1", {{4, all}});
+        check(c.gpr[3] == 0 && c.xer == kCa, "addic : -1 + 1 = 0 avec retenue");
+        c = exec("addic r3, r4, 1", {{4, 5}});
+        check(c.gpr[3] == 6 && c.xer == 0, "addic : 5 + 1, pas de retenue");
+        c = execx("addic r3, r4, 1", {{4, 5}}, kCa);
+        check(c.gpr[3] == 6 && c.xer == 0, "addic : la retenue est reecrite (effacee ici)");
+        c = exec("addic r3, r4, -1", {{4, 1}});
+        check(c.gpr[3] == 0 && c.xer == kCa, "addic : 1 + (-1) = 0 avec retenue");
+        c = exec("addic r3, r4, -1", {{4, 0}});
+        check(c.gpr[3] == all && c.xer == 0, "addic : 0 + (-1), pas de retenue");
+        c = exec("addic r3, r0, 5", {{0, 7}});
+        check(c.gpr[3] == 12, "addic : r0 est un vrai registre (pas le nombre 0)");
+        c = exec("addic. r3, r4, -1", {{4, 1}});
+        check(c.gpr[3] == 0 && c.xer == kCa && c.cr == 0x20000000, "addic. : zero (EQ) avec retenue");
+        c = exec("addic. r3, r4, -1", {{4, 0}});
+        check(c.gpr[3] == all && c.xer == 0 && c.cr == 0x80000000, "addic. : negatif (LT)");
+        c = exec("subfic r3, r4, 10", {{4, 3}});
+        check(c.gpr[3] == 7 && c.xer == kCa, "subfic : 10 - 3, pas d'emprunt donc CA = 1");
+        c = exec("subfic r3, r4, 10", {{4, 11}});
+        check(c.gpr[3] == all && c.xer == 0, "subfic : 10 - 11 = -1, emprunt donc CA = 0");
+
+        c = exec("addc r3, r4, r5", {{4, all}, {5, 1}});
+        check(c.gpr[3] == 0 && c.xer == kCa, "addc : retenue");
+        c = exec("addc r3, r4, r5", {{4, 1}, {5, 2}});
+        check(c.gpr[3] == 3 && c.xer == 0, "addc : pas de retenue");
+        c = execx("adde r3, r4, r5", {{4, 1}, {5, 2}}, kCa);
+        check(c.gpr[3] == 4 && c.xer == 0, "adde : 1 + 2 + CA");
+        c = execx("adde r3, r4, r5", {{4, all}, {5, 0}}, kCa);
+        check(c.gpr[3] == 0 && c.xer == kCa, "adde : retenue venue de la retenue entrante");
+        c = run_program("addc r3, r4, r6\n adde r5, r7, r8", {{4, all}, {6, 1}, {7, 5}, {8, 7}});
+        check(c.gpr[3] == 0 && c.gpr[5] == 13, "addition sur 128 bits : addc puis adde");
+
+        c = exec("subc r3, r4, r5", {{4, 10}, {5, 3}});     // r3 = r4 - r5
+        check(c.gpr[3] == 7 && c.xer == kCa, "subc : 10 - 3, CA = 1");
+        c = exec("subc r3, r4, r5", {{4, 3}, {5, 10}});
+        check(c.gpr[3] == 0xFFFFFFFFFFFFFFF9ull && c.xer == 0, "subc : 3 - 10 = -7, CA = 0");
+        c = exec("subc r3, r4, r5", {{4, 6}, {5, 6}});
+        check(c.gpr[3] == 0 && c.xer == kCa, "subc : egaux, CA = 1");
+        c = execx("subfe r3, r4, r5", {{4, 3}, {5, 10}}, kCa);   // r3 = r5 - r4 - (1 - CA)
+        check(c.gpr[3] == 7 && c.xer == kCa, "subfe avec CA = 1 : 10 - 3");
+        c = execx("subfe r3, r4, r5", {{4, 3}, {5, 10}}, 0);
+        check(c.gpr[3] == 6 && c.xer == kCa, "subfe avec CA = 0 : 10 - 3 - 1");
+        c = execx("addze r3, r4", {{4, all}}, kCa);
+        check(c.gpr[3] == 0 && c.xer == kCa, "addze : -1 + CA");
+        c = execx("addze r3, r4", {{4, 9}}, 0);
+        check(c.gpr[3] == 9 && c.xer == 0, "addze sans retenue");
+        c = execx("addme r3, r4", {{4, 5}}, kCa);
+        check(c.gpr[3] == 5 && c.xer == kCa, "addme : 5 - 1 + 1");
+        c = execx("addme r3, r4", {{4, 0}}, 0);
+        check(c.gpr[3] == all && c.xer == 0, "addme : 0 - 1 + 0");
+        c = execx("subfze r3, r4", {{4, 5}}, 0);
+        check(c.gpr[3] == 0xFFFFFFFFFFFFFFFAull && c.xer == 0, "subfze : ~5 + 0");
+        c = execx("subfze r3, r4", {{4, 0}}, kCa);
+        check(c.gpr[3] == 0 && c.xer == kCa, "subfze : ~0 + 1 = 0 avec retenue");
+        c = execx("subfme r3, r4", {{4, 0}}, kCa);
+        check(c.gpr[3] == all && c.xer == kCa, "subfme : ~0 - 1 + 1");
+
+        c = exec("sraw r3, r4, r5", {{4, 0x80000000ull}, {5, 4}});
+        check(c.gpr[3] == 0xFFFFFFFFF8000000ull && c.xer == 0, "sraw : negatif, que des 0 perdus, CA = 0");
+        c = exec("sraw r3, r4, r5", {{4, 0xFFFFFFF1ull}, {5, 2}});
+        check(c.gpr[3] == 0xFFFFFFFFFFFFFFFCull && c.xer == kCa, "sraw : -15 >> 2 = -4, un bit 1 perdu, CA = 1");
+        c = exec("sraw r3, r4, r5", {{4, 0x7FFFFFFFull}, {5, 4}});
+        check(c.gpr[3] == 0x07FFFFFF && c.xer == 0, "sraw : positif");
+        c = exec("sraw r3, r4, r5", {{4, 0x80000000ull}, {5, 32}});
+        check(c.gpr[3] == all && c.xer == kCa, "sraw 32 : tout est parti, resultat -1, CA = 1");
+        c = exec("sraw r3, r4, r5", {{4, 0x40000000ull}, {5, 40}});
+        check(c.gpr[3] == 0 && c.xer == 0, "sraw 40 positif : 0");
+        c = exec("sraw r3, r4, r5", {{4, 0x80000000ull}, {5, 0}});
+        check(c.gpr[3] == 0xFFFFFFFF80000000ull && c.xer == 0, "sraw 0 : etend le signe sur 64 bits");
+        c = exec("srawi r3, r4, 1", {{4, 0xFFFFFFFFull}});
+        check(c.gpr[3] == all && c.xer == kCa, "srawi : -1 >> 1, CA = 1");
+        c = exec("srawi r3, r4, 1", {{4, 0xFFFFFFFEull}});
+        check(c.gpr[3] == all && c.xer == 0, "srawi : -2 >> 1, CA = 0");
+        // division par 4 en arrondissant vers zero : srawi puis addze (idiome des compilateurs)
+        c = run_program("srawi r3, r4, 2\n addze r3, r3", {{4, 0xFFFFFFF9ull}});   // -7 / 4
+        check(c.gpr[3] == all, "srawi + addze : -7 / 4 = -1");
+        c = run_program("srawi r3, r4, 2\n addze r3, r3", {{4, 7}});
+        check(c.gpr[3] == 1, "srawi + addze : 7 / 4 = 1");
+        c = run_program("srawi r3, r4, 2\n addze r3, r3", {{4, 0xFFFFFFF8ull}});   // -8 / 4
+        check(c.gpr[3] == 0xFFFFFFFFFFFFFFFEull, "srawi + addze : -8 / 4 = -2");
+        c = exec("srad r3, r4, r5", {{4, 0x8000000000000000ull}, {5, 63}});
+        check(c.gpr[3] == all && c.xer == 0, "srad 63 de INT64_MIN : -1, aucun bit 1 perdu");
+        c = exec("srad r3, r4, r5", {{4, all}, {5, 63}});
+        check(c.gpr[3] == all && c.xer == kCa, "srad 63 de -1 : CA = 1");
+        c = exec("srad r3, r4, r5", {{4, all}, {5, 64}});
+        check(c.gpr[3] == all && c.xer == kCa, "srad 64 : tout parti");
+        c = exec("srad r3, r4, r5", {{4, 5}, {5, 100}});
+        check(c.gpr[3] == 0 && c.xer == 0, "srad 100 positif : 0");
+        c = exec("sradi r3, r4, 32", {{4, 0x8000000100000000ull}});
+        check(c.gpr[3] == 0xFFFFFFFF80000001ull && c.xer == 0, "sradi 32");
+        c = exec("sradi r3, r4, 4", {{4, 0xFFFFFFFFFFFFFF00ull}});
+        check(c.gpr[3] == 0xFFFFFFFFFFFFFFF0ull && c.xer == 0, "sradi 4 : -256 >> 4");
+        c = exec("sradi r3, r4, 4", {{4, 0xFFFFFFFFFFFFFF01ull}});
+        check(c.gpr[3] == 0xFFFFFFFFFFFFFFF0ull && c.xer == kCa, "sradi 4 : -255 >> 4 = -16, CA = 1");
+        c = exec("sradi r3, r4, 63", {{4, 0x7FFFFFFFFFFFFFFFull}});
+        check(c.gpr[3] == 0 && c.xer == 0, "sradi 63 positif");
+
+        c = exec("mtxer r3", {{3, all}});
+        check(c.xer == 0xE000007F, "mtxer : seuls SO, OV, CA et le compteur sont gardes");
+        c = execx("mfxer r4", {}, 0xE000007F);
+        check(c.gpr[4] == 0xE000007F, "mfxer");
+        c = execx("cmpwi r3, 0", {{3, 0}}, 0x80000000);
+        check(c.cr == 0x30000000, "cmpwi : le bit SO de XER est recopie dans le champ de CR");
     }
 
     // --- un vrai programme : CRC32 (zip, png...). Les valeurs attendues sont les valeurs connues du CRC32 ---

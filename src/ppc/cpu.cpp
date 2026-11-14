@@ -19,8 +19,13 @@ std::uint64_t add_signed(std::uint64_t value, std::int32_t offset) {
     return value + static_cast<std::uint64_t>(static_cast<std::int64_t>(offset));
 }
 
-// Ecrit 4 bits (LT = 8, GT = 4, EQ = 2) dans le champ crf de CR.
+constexpr std::uint32_t kXerSo = 0x80000000u;   // SO : "summary overflow"
+constexpr std::uint32_t kXerCa = 0x20000000u;   // CA : retenue (carry)
+constexpr std::uint32_t kXerMask = 0xE000007Fu; // les bits de XER que Nerith garde (SO, OV, CA et le compteur d'octets)
+
+// Ecrit 4 bits (LT = 8, GT = 4, EQ = 2) dans le champ crf de CR ; le bit SO du champ recopie celui de XER.
 void set_cr_bits(Cpu& cpu, std::uint8_t crf, std::uint32_t bits) {
+    bits |= (cpu.xer & kXerSo) != 0 ? 1u : 0u;
     const unsigned shift = 4u * (7u - crf);
     cpu.cr = (cpu.cr & ~(0xFu << shift)) | (bits << shift);
 }
@@ -64,6 +69,36 @@ std::uint64_t rotl64(std::uint64_t value, unsigned n) {
 std::uint64_t rotl32_doubled(std::uint64_t value, unsigned n) {
     const std::uint64_t low = low32u(value);
     return rotl64((low << 32) | low, n);
+}
+
+// a + b + retenue entrante, sur 64 bits ; renvoie aussi la retenue sortante (le "carry").
+std::uint64_t add_carry(std::uint64_t a, std::uint64_t b, bool carry_in, bool& carry_out) {
+    const std::uint64_t sum = a + b;
+    const std::uint64_t total = sum + (carry_in ? 1u : 0u);
+    carry_out = sum < a || total < sum;
+    return total;
+}
+
+void set_carry(Cpu& cpu, bool carry) {
+    cpu.xer = carry ? (cpu.xer | kXerCa) : (cpu.xer & ~kXerCa);
+}
+
+// Decalage a droite AVEC signe (les bits qui entrent a gauche copient le signe) de "bits" bits de valeur.
+// Renvoie le resultat sur 64 bits et dit si la retenue doit etre posee : valeur negative ET un bit 1 est parti.
+std::uint64_t shift_right_signed(std::int64_t value, unsigned amount, unsigned bits, bool& carry) {
+    const unsigned last = bits - 1;   // le plus grand decalage utile (31 ou 63)
+    const unsigned n = amount > last ? last : amount;
+    std::uint64_t lost = 0;
+    if (amount > last) {
+        lost = value != 0 ? 1 : 0;   // tout est parti ; le resultat est 0 ou -1
+    } else if (n > 0) {
+        lost = static_cast<std::uint64_t>(value) & ((std::uint64_t{1} << n) - 1);
+    }
+    carry = value < 0 && lost != 0;
+    if (amount > last) {
+        return value < 0 ? ~std::uint64_t{0} : 0;
+    }
+    return static_cast<std::uint64_t>(value >> n);   // decalage avec signe (defini depuis C++20)
 }
 
 unsigned count_leading_zeros(std::uint64_t value, unsigned bits) {
@@ -180,6 +215,71 @@ bool execute_alu(const Instruction& i, Cpu& cpu) {
     switch (i.kind) {
         case Kind::Mulli:  g[i.rd] = a * static_cast<std::uint64_t>(static_cast<std::int64_t>(i.imm)); return true;
         case Kind::Mulld:  g[i.rd] = a * b; return true;
+
+        // --- retenue (CA) : ces instructions lisent et ecrivent le bit CA de XER ---
+        case Kind::Addic:
+        case Kind::AddicDot: {   // rA est un vrai registre ici (r0 vaut r0, pas 0)
+            bool carry = false;
+            const std::uint64_t result = add_carry(a, static_cast<std::uint64_t>(static_cast<std::int64_t>(i.imm)), false, carry);
+            g[i.rd] = result;
+            set_carry(cpu, carry);
+            if (i.kind == Kind::AddicDot) {
+                set_cr_field(cpu, 0, static_cast<std::int64_t>(result), 0);
+            }
+            return true;
+        }
+        case Kind::Subfic: {   // rD = SIMM - rA
+            bool carry = false;
+            g[i.rd] = add_carry(~a, static_cast<std::uint64_t>(static_cast<std::int64_t>(i.imm)), true, carry);
+            set_carry(cpu, carry);
+            return true;
+        }
+        case Kind::Addc:
+        case Kind::Adde:
+        case Kind::Subfc:
+        case Kind::Subfe:
+        case Kind::Addze:
+        case Kind::Addme:
+        case Kind::Subfze:
+        case Kind::Subfme: {
+            const bool ca = (cpu.xer & kXerCa) != 0;
+            const std::uint64_t ones = ~std::uint64_t{0};
+            bool carry = false;
+            std::uint64_t result = 0;
+            switch (i.kind) {
+                case Kind::Addc:   result = add_carry(a, b, false, carry); break;
+                case Kind::Adde:   result = add_carry(a, b, ca, carry); break;
+                case Kind::Subfc:  result = add_carry(~a, b, true, carry); break;   // rB - rA
+                case Kind::Subfe:  result = add_carry(~a, b, ca, carry); break;
+                case Kind::Addze:  result = add_carry(a, 0, ca, carry); break;
+                case Kind::Addme:  result = add_carry(a, ones, ca, carry); break;
+                case Kind::Subfze: result = add_carry(~a, 0, ca, carry); break;
+                default:           result = add_carry(~a, ones, ca, carry); break;   // Subfme
+            }
+            g[i.rd] = result;
+            set_carry(cpu, carry);
+            return true;
+        }
+        case Kind::Sraw:
+        case Kind::Srawi: {   // decalage de 32 bits avec signe : le resultat est etendu sur 64 bits
+            const unsigned n = i.kind == Kind::Srawi ? i.sh : static_cast<unsigned>(b & 0x3F);
+            bool carry = false;
+            const std::uint64_t result =
+                shift_right_signed(static_cast<std::int32_t>(low32u(s)), n, 32, carry);
+            g[i.ra] = result;
+            set_carry(cpu, carry);
+            return true;
+        }
+        case Kind::Srad:
+        case Kind::Sradi: {
+            const unsigned n = i.kind == Kind::Sradi ? i.sh : static_cast<unsigned>(b & 0x7F);
+            bool carry = false;
+            g[i.ra] = shift_right_signed(static_cast<std::int64_t>(s), n, 64, carry);
+            set_carry(cpu, carry);
+            return true;
+        }
+        case Kind::Mfxer:  g[i.rd] = cpu.xer; return true;
+        case Kind::Mtxer:  cpu.xer = static_cast<std::uint32_t>(s) & kXerMask; return true;
         case Kind::Mulhw: {
             const std::int64_t product = static_cast<std::int64_t>(static_cast<std::int32_t>(low32u(a))) *
                                          static_cast<std::int64_t>(static_cast<std::int32_t>(low32u(b)));

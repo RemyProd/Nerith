@@ -237,6 +237,14 @@ std::uint32_t encode_table_op(const Line& line, const OpInfo& info) {
         case Layout::RaRs:
             expect_operands(line, 2);
             return word | (parse_register(line, op[1]) << 21) | (parse_register(line, op[0]) << 16);
+        case Layout::RaRsSh:   // rA, rS, SH (0 a 31)
+            expect_operands(line, 3);
+            return word | (parse_register(line, op[1]) << 21) | (parse_register(line, op[0]) << 16) |
+                   (static_cast<std::uint32_t>(parse_value(line, op[2], 0, 31)) << 11);
+        case Layout::RtRbRa:   // "subc rD, rB, rA" : les deux derniers registres sont dans l'ordre inverse du mot
+            expect_operands(line, 3);
+            return word | (parse_register(line, op[0]) << 21) | (parse_register(line, op[2]) << 16) |
+                   (parse_register(line, op[1]) << 11);
         case Layout::RtRa:
             expect_operands(line, 2);
             return word | (parse_register(line, op[0]) << 21) | (parse_register(line, op[1]) << 16);
@@ -278,6 +286,18 @@ bool encode_extra(const Line& line, std::uint32_t& word) {
         expect_operands(line, 2);
         const std::uint32_t rs = parse_register(line, op[1]);
         word = (31u << 26) | (124u << 1) | (rs << 21) | (parse_register(line, op[0]) << 16) | (rs << 11);
+        return true;
+    }
+    if (m == "sradi") {   // sradi rA, rS, SH (0 a 63) : le bit de poids fort de SH est a droite du mot
+        expect_operands(line, 3);
+        const std::uint32_t sh = static_cast<std::uint32_t>(parse_value(line, op[2], 0, 63));
+        word = (31u << 26) | (parse_register(line, op[1]) << 21) | (parse_register(line, op[0]) << 16) |
+               ((sh & 0x1Fu) << 11) | (413u << 2) | ((sh >> 5) << 1);
+        return true;
+    }
+    if (m == "mfxer" || m == "mtxer") {
+        expect_operands(line, 1);
+        word = (m == "mfxer" ? 0x7C0102A6u : 0x7C0103A6u) | (parse_register(line, op[0]) << 21);
         return true;
     }
     if (m == "rotlw") {   // rotlw rA, rS, rB = rlwnm rA, rS, rB, 0, 31

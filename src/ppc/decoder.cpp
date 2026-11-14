@@ -45,6 +45,10 @@ std::string table_text(const OpInfo& op, const Instruction& i) {
             return name + " " + ra + ", " + rd + ", " + rb;
         case Layout::RaRs:
             return name + " " + ra + ", " + rd;
+        case Layout::RaRsSh:
+            return name + " " + ra + ", " + rd + ", " + std::to_string(i.sh);
+        case Layout::RtRbRa:
+            return name + " " + rd + ", " + rb + ", " + ra;
         case Layout::RtRa:
             return name + " " + rd + ", " + ra;
         case Layout::RtRaSimm:
@@ -258,7 +262,9 @@ Instruction decode(std::uint32_t word) {
                             const std::uint32_t field = (word >> 11) & 0x3FF;   // moities inversees
                             const std::uint32_t spr = ((field & 0x1F) << 5) | (field >> 5);
                             const bool read = ((word >> 1) & 0x3FF) == 339;
-                            if (spr == 8) {
+                            if (spr == 1) {
+                                result.kind = read ? Kind::Mfxer : Kind::Mtxer;
+                            } else if (spr == 8) {
                                 result.kind = read ? Kind::Mflr : Kind::Mtlr;
                             } else if (spr == 9) {
                                 result.kind = read ? Kind::Mfctr : Kind::Mtctr;
@@ -266,6 +272,12 @@ Instruction decode(std::uint32_t word) {
                             result.ra = 0;
                             result.rb = 0;
                         }
+                        break;
+                    case 826:   // sradi : l'opcode etendu a 9 bits vaut 413, et le bit 30 est le bit de poids fort de SH
+                    case 827:
+                        result.kind = Kind::Sradi;
+                        result.sh = static_cast<std::uint8_t>(((word >> 1) & 1u) << 5 | field_16_20(word));
+                        result.rb = 0;
                         break;
                     case 32:  // cmplw (L = 0) ou cmpld (L = 1) : comparaison sans signe
                         result.kind = ((word >> 21) & 0x1) == 0 ? Kind::Cmplw : Kind::Cmpld;
@@ -316,6 +328,12 @@ Instruction decode(std::uint32_t word) {
                     case Layout::RaRsUimm:
                         result.imm = static_cast<std::int32_t>(word & 0xFFFF);
                         break;
+                    case Layout::RtRbRa:
+                        result.rb = field_16_20(word);
+                        break;
+                    case Layout::RaRsSh:
+                        result.sh = field_16_20(word);   // le decalage est dans le champ rB
+                        break;
                     case Layout::RaRs:
                     case Layout::RtRa:
                         break;
@@ -339,6 +357,13 @@ std::string to_text(const Instruction& i) {
             return compare_text("cmplw", i.crf, reg_name(i.ra), reg_name(i.rb));
         case Kind::Cmpld:
             return compare_text("cmpld", i.crf, reg_name(i.ra), reg_name(i.rb));
+
+        case Kind::Sradi:
+            return "sradi " + reg_name(i.ra) + ", " + reg_name(i.rd) + ", " + std::to_string(i.sh);
+        case Kind::Mfxer:
+            return "mfxer " + reg_name(i.rd);
+        case Kind::Mtxer:
+            return "mtxer " + reg_name(i.rd);
 
         case Kind::Rlwimi:
             return "rlwimi " + reg_name(i.ra) + ", " + reg_name(i.rd) + ", " + std::to_string(i.sh) + ", " +

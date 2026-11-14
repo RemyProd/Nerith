@@ -15,6 +15,7 @@ struct Cpu {
     std::uint64_t lr = 0;                  // registre de lien : adresse de retour (bl, blr)
     std::uint64_t ctr = 0;                 // registre compteur : boucles (bdnz) et sauts indirects (bctr)
     std::uint32_t cr = 0;                  // registre de conditions : 8 champs de 4 bits (LT, GT, EQ, SO)
+    std::uint32_t xer = 0;                 // registre d'exception : SO = 0x80000000, OV = 0x40000000, CA (retenue) = 0x20000000
 };
 
 // Dans CR, le champ n (0 a 7) occupe 4 bits ; le champ 0 est tout a gauche (bits de poids fort).

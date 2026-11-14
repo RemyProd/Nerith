@@ -53,6 +53,9 @@ enum class Kind {
     // Comparaisons sans signe et rotations (ecrites a la main dans le decodeur)
     Cmplwi, Cmpldi, Cmplw, Cmpld,
     Rlwimi, Rlwnm, Rldicl, Rldicr, Rldic, Rldimi,
+    // Retenue (bit CA du registre XER) : addition/soustraction avec retenue, decalages arithmetiques
+    Addic, AddicDot, Subfic, Addc, Adde, Subfc, Subfe, Addze, Addme, Subfze, Subfme,
+    Sraw, Srad, Srawi, Sradi, Mfxer, Mtxer,
 };
 
 // Le resultat du decodage d'un mot de 32 bits.
