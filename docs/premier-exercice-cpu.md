@@ -2,7 +2,7 @@
 
 # Premier exercice — CPU pédagogique
 
-> À réaliser après la préparation de l'environnement et les premiers fondamentaux C++.
+> **Réalisé le 2026-11-14** (voir la section « État réel » ci-dessous). Ce document garde la spécification d'origine.
 
 ## But
 Construire un mini-processeur pédagogique pour comprendre l'état CPU, les registres, les instructions, la mémoire et la boucle d'exécution.
@@ -47,22 +47,36 @@ Instructions exécutées = 4
 ```
 
 ## Étapes
-- [ ] Créer un projet console C++.
-- [ ] Définir une énumération `Operation`.
-- [ ] Définir une structure `Instruction`.
-- [ ] Définir une classe `VirtualCPU`.
-- [ ] Ajouter les quatre registres.
-- [ ] Ajouter l'état du processeur.
-- [ ] Implémenter `LOAD`.
-- [ ] Implémenter `ADD`.
-- [ ] Implémenter `SUB`.
-- [ ] Implémenter `HALT`.
-- [ ] Afficher les registres.
-- [ ] Vérifier le résultat attendu.
-- [ ] Ajouter la mémoire virtuelle.
-- [ ] Ajouter `STORE`.
-- [ ] Ajouter le compteur de programme.
-- [ ] Gérer les instructions invalides et les accès hors limites.
+- [x] Créer un projet console C++.
+- [x] Définir une énumération `Operation`.
+- [x] Définir une structure `Instruction`. (remplacée par 3 octets en mémoire)
+- [x] Définir une classe `VirtualCPU`. (remplacée par `Cpu` et `run`)
+- [x] Ajouter les quatre registres.
+- [x] Ajouter l'état du processeur.
+- [x] Implémenter `LOAD`.
+- [x] Implémenter `ADD`.
+- [x] Implémenter `SUB`.
+- [x] Implémenter `HALT`.
+- [x] Afficher les registres.
+- [x] Vérifier le résultat attendu.
+- [x] Ajouter la mémoire virtuelle.
+- [x] Ajouter `STORE`.
+- [x] Ajouter le compteur de programme.
+- [x] Gérer les instructions invalides et les accès hors limites.
+
+## État réel
+La version actuelle (`include/nerith/cpu.h`, `memory.h`, `disassembler.h`) s'écarte de la spécification d'origine :
+
+- Mémoire paramétrable (classe `Memory`, 64 octets dans la démo), lecture et écriture 32 bits en big-endian, accès vérifiés.
+- Instructions de 3 octets (opcode, registre, valeur) lues en mémoire, avec compteur de programme `pc`.
+- Jeu d'instructions : `Set`, `Add`, `Sub`, `Mul`, `Inc`, `Dec`, `Load`, `Store`, `Jmp`, `Jnz`, `Halt`.
+- Résultat renvoyé par `run` : `Halted`, `InvalidInstruction`, `OutOfBounds`, `StepLimit` (garde-fou contre les boucles infinies). Pas d'état « actif/arrêté » : c'est ce `Status` qui le remplace.
+- Compteur d'instructions exécutées : `cpu.instructions_executed`.
+- Assembleur : `assemble` transforme un programme en texte (étiquettes, commentaires, décimal et hexadécimal) en octets ; erreurs signalées avec le numéro de ligne.
+- Désassembleur : `disassemble` et `disassemble_range`.
+- Tests automatiques avec CTest : `test_cpu`, `test_memory`, `test_assembler`, `test_disassembler`.
+- Pas de classe `VirtualCPU` : `Cpu` est une `struct` et `run` une fonction.
+- Limite connue : les adresses (sauts, `Load`, `Store`) tiennent sur 1 octet, donc 255 au maximum.
 
 ## Questions à savoir expliquer
 - Qu'est-ce qu'un registre ?
@@ -79,6 +93,7 @@ Le programme fonctionne, les résultats sont vérifiés et on peut expliquer cha
 ## Améliorations ultérieures
 - Charger le programme depuis un fichier.
 - Ajouter un mode pas-à-pas.
-- Ajouter un désassembleur simple.
+- ~~Ajouter un désassembleur simple.~~ Fait.
 - Ajouter une trace d'exécution.
-- Ajouter des tests unitaires.
+- ~~Ajouter des tests unitaires.~~ Fait.
+- ~~Ajouter un assembleur (texte vers octets).~~ Fait.

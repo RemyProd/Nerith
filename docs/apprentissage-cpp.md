@@ -7,35 +7,35 @@ Apprendre le C++ en construisant progressivement les outils et composants néces
 
 ## Niveau 1 — Fondamentaux
 - [ ] Types : `int`, `float`, `bool`, `char`, `std::string`.
-- [ ] Variables et constantes.
-- [ ] Opérateurs.
-- [ ] Conditions : `if`, `else`, `switch`.
-- [ ] Boucles : `for`, `while`.
-- [ ] Fonctions et paramètres.
-- [ ] Valeurs de retour.
+- [x] Variables et constantes.
+- [x] Opérateurs.
+- [x] Conditions : `if`, `else`, `switch`.
+- [x] Boucles : `for`, `while`.
+- [x] Fonctions et paramètres.
+- [x] Valeurs de retour.
 
 ## Niveau 2 — Données et structures
-- [ ] Tableaux et `std::array`.
-- [ ] `std::vector`.
-- [ ] `enum class`.
-- [ ] `struct`.
-- [ ] Classes et objets.
-- [ ] Encapsulation.
-- [ ] Références et pointeurs.
+- [x] Tableaux et `std::array`.
+- [x] `std::vector`.
+- [x] `enum class`.
+- [x] `struct`.
+- [x] Classes et objets.
+- [x] Encapsulation.
+- [x] Références et pointeurs.
 
 ## Niveau 3 — C++ moderne
-- [ ] `const` et `constexpr`.
+- [x] `const` et `constexpr`.
 - [ ] Durée de vie des objets.
 - [ ] RAII.
 - [ ] Smart pointers.
 - [ ] `std::optional`.
-- [ ] Gestion des erreurs.
+- [ ] Gestion des erreurs. (vu : `try`/`catch` sur `std::out_of_range`)
 - [ ] Templates de base.
 
 ## Niveau 4 — Système et performance
 - [ ] Fichiers binaires.
-- [ ] Endianness.
-- [ ] Bits et masques binaires.
+- [x] Endianness.
+- [x] Bits et masques binaires.
 - [ ] Alignement mémoire.
 - [ ] Threads et synchronisation.
 - [ ] Profilage.

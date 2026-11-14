@@ -15,30 +15,30 @@ Les durées ne sont pas garanties. Pour une personne seule débutant en C++, ce 
 
 ## Phase 1 — Bases C++
 Détail du parcours : [Apprentissage C++](apprentissage-cpp.md).
-- [ ] Types, variables et opérateurs.
-- [ ] Conditions et boucles.
-- [ ] Fonctions.
-- [ ] Tableaux, `std::array`, `std::vector`.
-- [ ] Références et pointeurs.
-- [ ] Structures et classes.
+- [x] Types, variables et opérateurs.
+- [x] Conditions et boucles.
+- [x] Fonctions.
+- [x] Tableaux, `std::array`, `std::vector`.
+- [x] Références et pointeurs.
+- [x] Structures et classes.
 - [ ] Durée de vie et gestion mémoire.
 - [ ] Fichiers et flux.
 - [ ] Débogueur Visual Studio.
-- [ ] Compilation et warnings.
+- [x] Compilation et warnings.
 
 **Livrable :** petits programmes compris et maîtrisés.
 
 ## Phase 2 — CPU pédagogique
 Spécification : [Premier exercice](premier-exercice-cpu.md).
-- [ ] Registres.
-- [ ] Mémoire virtuelle bornée.
-- [ ] Jeu d'instructions minimal.
-- [ ] Compteur de programme.
-- [ ] Boucle d'exécution.
-- [ ] Arrêt et instructions invalides.
-- [ ] Tests automatisés.
+- [x] Registres. (4 registres)
+- [x] Mémoire virtuelle bornée. (classe `Memory`, accès vérifiés)
+- [x] Jeu d'instructions minimal. (`Set`, `Add`, `Sub`, `Mul`, `Inc`, `Dec`, `Load`, `Store`, `Jmp`, `Jnz`, `Halt`)
+- [x] Compteur de programme.
+- [x] Boucle d'exécution.
+- [x] Arrêt et instructions invalides. (`Halted`, `InvalidInstruction`, `OutOfBounds`, `StepLimit`)
+- [x] Tests automatisés. (CTest : cpu, mémoire, assembleur, désassembleur)
 
-**Livrable :** petit CPU pédagogique fonctionnel.
+**Livrable :** petit CPU pédagogique fonctionnel. Fait, assembleur et désassembleur compris.
 
 ## Phase 3 — Architecture du projet réel
 Voir [Architecture](architecture.md).

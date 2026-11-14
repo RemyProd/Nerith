@@ -2,7 +2,7 @@
 
 Projet de recherche et de développement d'un émulateur Xbox 360 indépendant pour PC (Windows), écrit en C++.
 
-> **Statut : phase 1 en cours (apprentissage du C++), avec un premier CPU pédagogique et des tests automatiques. Ce n'est pas encore un émulateur : il n'émule pas encore la Xbox 360 et ne lance aucun jeu.**
+> **Statut : phase 1 en cours (apprentissage du C++). Un CPU pédagogique (11 instructions, sauts, mémoire vérifiée) avec assembleur, désassembleur et tests automatiques est fonctionnel. Ce n'est pas encore un émulateur : il n'émule pas encore la Xbox 360 et ne lance aucun jeu.**
 
 *Nerith est un nom de travail provisoire : il peut changer avant la première version publique.*
 
@@ -65,13 +65,13 @@ ctest --test-dir build -C Debug --output-on-failure
 .\build\Debug\nerith.exe
 ```
 
-Le dossier `build/` est ignoré par Git. Pour l'instant, le programme exécute un petit programme d'octets sur un CPU pédagogique à 4 registres, qui sert d'exercice avant le vrai CPU PowerPC.
+Le dossier `build/` est ignoré par Git. Pour l'instant, le programme assemble un petit programme écrit en texte (une boucle qui additionne 5 + 4 + 3 + 2 + 1), l'affiche en clair, l'exécute sur un CPU pédagogique à 4 registres et affiche le résultat. Ça sert d'exercice avant le vrai CPU PowerPC.
 
 ## Structure du dépôt
 
 ```
-include/nerith/   en-têtes publics (cpu.h)
-src/              code du CPU pédagogique et programme de démonstration
+include/nerith/   en-têtes publics (cpu.h, memory.h, assembler.h, disassembler.h)
+src/              CPU pédagogique, mémoire, assembleur, désassembleur et programme de démonstration
 tests/            tests automatiques
 docs/             documentation du projet
 ```

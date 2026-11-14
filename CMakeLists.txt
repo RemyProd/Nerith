@@ -7,6 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Bibliotheque : le coeur de l'emulateur (pour l'instant, un CPU pedagogique)
 add_library(nerith_core
+    src/assembler.cpp
     src/cpu.cpp
     src/memory.cpp
     src/disassembler.cpp
@@ -31,6 +32,10 @@ add_test(NAME cpu COMMAND test_cpu)
 add_executable(test_memory tests/test_memory.cpp)
 target_link_libraries(test_memory PRIVATE nerith_core)
 add_test(NAME memory COMMAND test_memory)
+
+add_executable(test_assembler tests/test_assembler.cpp)
+target_link_libraries(test_assembler PRIVATE nerith_core)
+add_test(NAME assembler COMMAND test_assembler)
 
 add_executable(test_disassembler tests/test_disassembler.cpp)
 target_link_libraries(test_disassembler PRIVATE nerith_core)

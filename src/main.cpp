@@ -1,34 +1,42 @@
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
+#include <string>
 #include <vector>
 
+#include "nerith/assembler.h"
 #include "nerith/cpu.h"
 #include "nerith/disassembler.h"
 #include "nerith/memory.h"
 
 int main() {
-    using nerith::code;
-    using nerith::Op;
+    // Somme de 5 + 4 + 3 + 2 + 1 avec une boucle, ecrite en texte.
+    // "loop:" est une etiquette : elle donne un nom a l'adresse de l'instruction suivante.
+    const std::string source =
+        "; somme de 5 + 4 + 3 + 2 + 1\n"
+        "        Set r0, 5       ; compteur\n"
+        "        Set r1, 0       ; somme\n"
+        "loop:   Add r1, r0\n"
+        "        Dec r0\n"
+        "        Jnz r0, loop    ; tant que r0 != 0, on recommence\n"
+        "        Halt\n";
 
-    // Somme de 5 + 4 + 3 + 2 + 1 avec une boucle :
-    //   r0 = 5 (compteur) ; r1 = 0 (somme)
-    //   adresse 6 : r1 += r0 ; r0 -= 1 ; si r0 != 0, retour a l'adresse 6
-    const std::vector<std::uint8_t> program = {
-        code(Op::Set),  0, 5,    // adresse 0
-        code(Op::Set),  1, 0,    // adresse 3
-        code(Op::Add),  1, 0,    // adresse 6  : debut de la boucle
-        code(Op::Dec),  0, 0,    // adresse 9
-        code(Op::Jnz),  0, 6,    // adresse 12 : si r0 != 0, saute a l'adresse 6
-        code(Op::Halt), 0, 0     // adresse 15
-    };
+    // l'assembleur transforme le texte en octets
+    std::vector<std::uint8_t> program;
+    try {
+        program = nerith::assemble(source);
+    } catch (const nerith::AssemblyError& error) {
+        std::cerr << "Erreur d'assemblage, " << error.what() << "\n";
+        return 1;
+    }
 
     // le programme est charge en memoire, a l'adresse 0
     nerith::Memory memory(64);
     memory.load(0, program);
 
     // on affiche le programme en clair avant de l'executer
-    std::cout << "Programme :\n" << nerith::disassemble_range(memory, 0, 6) << "\n";
+    std::cout << "Programme :\n"
+              << nerith::disassemble_range(memory, 0, program.size() / 3) << "\n";
 
     nerith::Cpu cpu;
     const nerith::Status status = nerith::run(cpu, memory);
