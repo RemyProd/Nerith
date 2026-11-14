@@ -4,7 +4,7 @@
 
 namespace nerith {
 
-Status run(Cpu& cpu, const Memory& memory) {
+Status run(Cpu& cpu, Memory& memory) {
     try {
         while (true) {
             // fetch : lire l'instruction en memoire (les acces sont verifies)
@@ -32,6 +32,12 @@ Status run(Cpu& cpu, const Memory& memory) {
                     break;
                 case Op::Dec:
                     cpu.registers.at(reg) -= 1;
+                    break;
+                case Op::Load:
+                    cpu.registers.at(reg) = memory.read32(value);
+                    break;
+                case Op::Store:
+                    memory.write32(value, cpu.registers.at(reg));
                     break;
                 case Op::Halt:
                     return Status::Halted;

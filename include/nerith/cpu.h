@@ -18,6 +18,8 @@ enum class Op : std::uint8_t {
     Mul  = 0x05,   // registre *= registre numero "valeur"
     Inc  = 0x06,   // registre += 1 (la valeur est ignoree)
     Dec  = 0x07,   // registre -= 1 (la valeur est ignoree)
+    Load = 0x08,   // registre = mot de 32 bits lu en memoire a l'adresse "valeur"
+    Store = 0x09,  // ecrit le registre en memoire (32 bits) a l'adresse "valeur"
     Halt = 0xFF    // arret propre
 };
 
@@ -39,7 +41,7 @@ struct Cpu {
 };
 
 // Execute les instructions lues en memoire, a partir de cpu.pc,
-// jusqu'a Halt ou jusqu'a une erreur. Le CPU ne modifie pas la memoire.
-Status run(Cpu& cpu, const Memory& memory);
+// jusqu'a Halt ou jusqu'a une erreur. Store peut modifier la memoire.
+Status run(Cpu& cpu, Memory& memory);
 
 }  // namespace nerith

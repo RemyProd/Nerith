@@ -70,6 +70,48 @@ int main() {
         check(st == Status::OutOfBounds, "programme sans Halt detecte");
     }
 
+    // --- Load et Store : le CPU lit et ecrit la memoire ---
+
+    {   // Store ecrit le registre en memoire, en big-endian
+        Memory memory(64);
+        memory.load(0, {code(Op::Set), 0, 0xAB, code(Op::Store), 0, 40, code(Op::Halt), 0, 0});
+        Cpu cpu;
+        const Status st = run(cpu, memory);
+        check(st == Status::Halted, "Store : arret normal");
+        check(memory.read32(40) == 0xAB, "Store : le mot 32 bits vaut 0xAB");
+        check(memory.read8(43) == 0xAB, "Store : l'octet de poids faible est a l'adresse 43");
+        check(memory.read8(40) == 0, "Store : l'octet de poids fort vaut 0");
+    }
+    {   // Load lit un mot de 32 bits depuis la memoire
+        Memory memory(64);
+        memory.write32(20, 0x12345678);
+        memory.load(0, {code(Op::Load), 1, 20, code(Op::Halt), 0, 0});
+        Cpu cpu;
+        const Status st = run(cpu, memory);
+        check(st == Status::Halted, "Load : arret normal");
+        check(cpu.registers[1] == 0x12345678, "Load : r1 vaut 0x12345678");
+    }
+    {   // Store puis Load : on retrouve la valeur
+        Memory memory(64);
+        memory.load(0, {
+            code(Op::Set),   0, 99,
+            code(Op::Store), 0, 32,
+            code(Op::Load),  3, 32,
+            code(Op::Halt),  0, 0});
+        Cpu cpu;
+        run(cpu, memory);
+        check(cpu.registers[3] == 99, "Store puis Load : r3 vaut 99");
+    }
+    {   // Store hors limites : refuse, et rien n'est ecrit
+        Memory memory(64);
+        memory.load(0, {code(Op::Set), 0, 7, code(Op::Store), 0, 62, code(Op::Halt), 0, 0});
+        Cpu cpu;
+        const Status st = run(cpu, memory);
+        check(st == Status::OutOfBounds, "Store a l'adresse 62 hors limites detecte");
+        check(memory.read8(62) == 0, "Store refuse : l'octet 62 reste a 0");
+        check(memory.read8(63) == 0, "Store refuse : l'octet 63 reste a 0");
+    }
+
     // --- Nouveaux tests : le CPU lit son programme en memoire ---
 
     {   // pc avance de 3 octets par instruction
