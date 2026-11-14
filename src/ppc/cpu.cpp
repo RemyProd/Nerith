@@ -146,6 +146,36 @@ Status step(Cpu& cpu, Memory& memory) {
                 return Status::Running;
             }
 
+            case Kind::Lwzx: {
+                const std::uint64_t address = base_value(cpu, i.ra) + cpu.gpr[i.rb];
+                const std::uint32_t value = memory.read32(static_cast<std::size_t>(address));
+                cpu.gpr[i.rd] = value;
+                cpu.pc = next;
+                return Status::Running;
+            }
+
+            case Kind::Stwx: {
+                const std::uint64_t address = base_value(cpu, i.ra) + cpu.gpr[i.rb];
+                memory.write32(static_cast<std::size_t>(address), static_cast<std::uint32_t>(cpu.gpr[i.rd]));
+                cpu.pc = next;
+                return Status::Running;
+            }
+
+            case Kind::Lbzx: {
+                const std::uint64_t address = base_value(cpu, i.ra) + cpu.gpr[i.rb];
+                const std::uint8_t value = memory.read8(static_cast<std::size_t>(address));
+                cpu.gpr[i.rd] = value;
+                cpu.pc = next;
+                return Status::Running;
+            }
+
+            case Kind::Stbx: {
+                const std::uint64_t address = base_value(cpu, i.ra) + cpu.gpr[i.rb];
+                memory.write8(static_cast<std::size_t>(address), static_cast<std::uint8_t>(cpu.gpr[i.rd]));
+                cpu.pc = next;
+                return Status::Running;
+            }
+
             case Kind::Bc: {
                 bool taken = false;
                 if (i.bo == 16 || i.bo == 18) {   // bdnz, bdz : on decremente CTR, puis on le teste

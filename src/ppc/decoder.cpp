@@ -153,6 +153,10 @@ Instruction decode(std::uint32_t word) {
                     case 40:  result.kind = Kind::Sub;   break;
                     case 235: result.kind = Kind::Mullw; break;
                     case 444: result.kind = Kind::Or;    break;
+                    case 23:  result.kind = Kind::Lwzx;  break;
+                    case 151: result.kind = Kind::Stwx;  break;
+                    case 87:  result.kind = Kind::Lbzx;  break;
+                    case 215: result.kind = Kind::Stbx;  break;
                     case 339:   // mfspr : seulement LR (numero 8) et CTR (numero 9)
                     case 467:   // mtspr : seulement LR et CTR
                         {
@@ -264,6 +268,17 @@ std::string to_text(const Instruction& i) {
 
         case Kind::Stb:
             return "stb " + reg_name(i.rd) + ", " + std::to_string(i.imm) + "(" + reg_name(i.ra) + ")";
+
+        case Kind::Lwzx:
+        case Kind::Stwx:
+        case Kind::Lbzx:
+        case Kind::Stbx: {
+            const char* name = i.kind == Kind::Lwzx ? "lwzx " : (i.kind == Kind::Stwx ? "stwx " :
+                               (i.kind == Kind::Lbzx ? "lbzx " : "stbx "));
+            // rA = 0 veut dire le nombre 0 : on l'ecrit "0" (comme llvm) pour ne pas laisser croire a r0
+            return std::string(name) + reg_name(i.rd) + ", " + (i.ra == 0 ? std::string("0") : reg_name(i.ra)) +
+                   ", " + reg_name(i.rb);
+        }
 
         case Kind::Add:
             return "add " + reg_name(i.rd) + ", " + reg_name(i.ra) + ", " + reg_name(i.rb);

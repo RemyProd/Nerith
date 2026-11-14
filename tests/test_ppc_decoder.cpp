@@ -70,6 +70,11 @@ int main() {
     check(text(0x7C832B78) == "or r3, r4, r5", "or");
     check(text(0x88610008) == "lbz r3, 8(r1)", "lbz");
     check(text(0x98610008) == "stb r3, 8(r1)", "stb");
+    check(text(0x7C64282E) == "lwzx r3, r4, r5", "lwzx");
+    check(text(0x7CC7412E) == "stwx r6, r7, r8", "stwx");
+    check(text(0x7C6028AE) == "lbzx r3, 0, r5", "lbzx avec rA = 0");
+    check(text(0x7D2A59AE) == "stbx r9, r10, r11", "stbx");
+    check(decode(0x7C64282F).kind == Kind::Unknown, "lwzx. (Rc = 1) n'existe pas");
     check(text(0x3C608200) == "lis r3, 0x8200", "lis");
     check(text(0x3C640001) == "addis r3, r4, 1", "addis");
     check(decode(0x7C652051).kind == Kind::Unknown, "sub. (Rc = 1) pas encore gere");

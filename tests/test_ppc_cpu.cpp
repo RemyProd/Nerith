@@ -223,6 +223,35 @@ int main() {
         cpu.gpr[3] = 5;
         check(step(cpu, memory) == Status::OutOfBounds && cpu.gpr[3] == 5, "lbz hors memoire");
     }
+    {   // lwzx, stwx, lbzx, stbx : adresse = rA + rB
+        Memory memory(256);
+        memory.write32(0x24, 0x11223344);
+        load_words(memory, {
+            0x7C64282E,   // lwzx r3, r4, r5
+            0x7CC7412E,   // stwx r6, r7, r8
+            0x7C6028AE,   // lbzx r3, 0, r5   (rA = 0 : l'adresse est r5 seule)
+            0x7D2A59AE}); // stbx r9, r10, r11
+        Cpu cpu;
+        cpu.gpr[4] = 0x20; cpu.gpr[5] = 0x04;
+        cpu.gpr[6] = 0xDEADBEEF; cpu.gpr[7] = 0x30; cpu.gpr[8] = 0x08;
+        cpu.gpr[10] = 0x40; cpu.gpr[11] = 0x01; cpu.gpr[9] = 0x1FF;
+        check(step(cpu, memory) == Status::Running && cpu.gpr[3] == 0x11223344, "lwzx : 0x20 + 0x04");
+        step(cpu, memory);
+        check(memory.read32(0x38) == 0xDEADBEEF, "stwx : 0x30 + 0x08");
+        cpu.gpr[3] = 0xFFFF;
+        memory.write32(0x04, 0xAABBCCDD);
+        step(cpu, memory);
+        check(cpu.gpr[3] == 0xAA, "lbzx avec rA = 0 : premier octet de l'adresse r5");
+        step(cpu, memory);
+        check(memory.read32(0x40) == 0x00FF0000, "stbx : un seul octet change, a 0x41");
+    }
+    {   // lwzx hors memoire : rien ne change
+        Memory memory(16);
+        memory.write32(0, 0x7C64282E);   // lwzx r3, r4, r5
+        Cpu cpu;
+        cpu.gpr[3] = 7; cpu.gpr[4] = 0x100;
+        check(step(cpu, memory) == Status::OutOfBounds && cpu.gpr[3] == 7 && cpu.pc == 0, "lwzx hors memoire");
+    }
     {   // mflr, mtlr
         Memory memory(16);
         load_words(memory, {

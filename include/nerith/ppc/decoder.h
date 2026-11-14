@@ -31,6 +31,10 @@ enum class Kind {
     Bc,        // saut conditionnel : beq, bne, blt, bgt, ble, bge (selon un bit de CR) ; bdnz, bdz (selon CTR)
     Blr,       // blr / blrl          (retour de fonction : saute a LR ; blrl sauvegarde ensuite le retour dans LR)
     Bctr,      // bctr / bctrl        (saut vers l'adresse dans CTR ; bctrl sauvegarde le retour dans LR)
+    Lwzx,      // lwzx rD, rA, rB     (comme lwz, mais l'adresse est rA + rB ; rA = 0 veut dire le nombre 0)
+    Stwx,      // stwx rS, rA, rB     (comme stw, adresse rA + rB)
+    Lbzx,      // lbzx rD, rA, rB     (comme lbz, adresse rA + rB)
+    Stbx,      // stbx rS, rA, rB     (comme stb, adresse rA + rB)
 };
 
 // Le resultat du decodage d'un mot de 32 bits.

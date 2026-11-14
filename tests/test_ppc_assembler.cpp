@@ -68,6 +68,11 @@ int main() {
     check(one("or r3, r4, r5") == 0x7C832B78, "or");
     check(one("lbz r3, 8(r1)") == 0x88610008, "lbz");
     check(one("stb r3, 8(r1)") == 0x98610008, "stb");
+    check(one("lwzx r3, r4, r5") == 0x7C64282E, "lwzx");
+    check(one("stwx r6, r7, r8") == 0x7CC7412E, "stwx");
+    check(one("lbzx r3, 0, r5") == 0x7C6028AE, "lbzx avec 0");
+    check(one("lbzx r3, r0, r5") == 0x7C6028AE, "lbzx avec r0 : meme mot");
+    check(one("stbx r9, r10, r11") == 0x7D2A59AE, "stbx");
     check(one("lis r3, 0x8200") == 0x3C608200, "lis");
     check(one("lis r3, -1") == 0x3C60FFFF, "lis negatif");
     check(one("addis r3, r4, -1") == 0x3C64FFFF, "addis");

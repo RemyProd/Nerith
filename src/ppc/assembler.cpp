@@ -76,6 +76,11 @@ std::uint32_t parse_register(const Line& line, const std::string& text) {
     return static_cast<std::uint32_t>(number);
 }
 
+// Registre de base d'un acces "x" : "0" (le nombre 0) ou un registre. Dans le mot, 0 est le meme code que r0.
+std::uint32_t parse_index_base(const Line& line, const std::string& text) {
+    return text == "0" ? 0u : parse_register(line, text);
+}
+
 // "cr0" a "cr7"
 bool looks_like_cr(const std::string& word) {
     return word.size() == 3 && word[0] == 'c' && word[1] == 'r' && word[2] >= '0' && word[2] <= '7';
@@ -208,6 +213,13 @@ std::uint32_t encode(const Line& line, const std::map<std::string, std::size_t>&
     if (m == "add") {
         expect_operands(line, 3);
         return 0x7C000214u | (parse_register(line, op[0]) << 21) | (parse_register(line, op[1]) << 16) |
+               (parse_register(line, op[2]) << 11);
+    }
+    if (m == "lwzx" || m == "stwx" || m == "lbzx" || m == "stbx") {   // xxx rD, rA|0, rB
+        expect_operands(line, 3);
+        const std::uint32_t word = m == "lwzx" ? 0x7C00002Eu : (m == "stwx" ? 0x7C00012Eu :
+                                   (m == "lbzx" ? 0x7C0000AEu : 0x7C0001AEu));
+        return word | (parse_register(line, op[0]) << 21) | (parse_index_base(line, op[1]) << 16) |
                (parse_register(line, op[2]) << 11);
     }
     if (m == "lis") {
