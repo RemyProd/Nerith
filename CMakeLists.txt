@@ -40,8 +40,9 @@ add_library(nerith_toy
 nerith_module(nerith_toy)
 target_link_libraries(nerith_toy PUBLIC nerith_memory)
 
-# ppc : le CPU de la Xbox 360 (PowerPC) ; pour l'instant, le decodeur et le desassembleur
+# ppc : le CPU de la Xbox 360 (PowerPC) ; pour l'instant, decodeur, desassembleur et interpreteur
 add_library(nerith_ppc
+    src/ppc/cpu.cpp
     src/ppc/decoder.cpp
     src/ppc/disassembler.cpp
 )
@@ -69,3 +70,4 @@ nerith_test(assembler    nerith_toy)
 nerith_test(disassembler nerith_toy)
 nerith_test(ppc_decoder  nerith_ppc)
 nerith_test(ppc_disassembler nerith_ppc)
+nerith_test(ppc_cpu          nerith_ppc)
