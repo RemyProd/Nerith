@@ -73,6 +73,20 @@ int main() {
     check(one("lbzx r3, 0, r5") == 0x7C6028AE, "lbzx avec 0");
     check(one("lbzx r3, r0, r5") == 0x7C6028AE, "lbzx avec r0 : meme mot");
     check(one("stbx r9, r10, r11") == 0x7D2A59AE, "stbx");
+    check(one("cmpdi r3, 0") == 0x2C230000, "cmpdi");
+    check(one("cmpdi cr1, r3, 255") == 0x2CA300FF, "cmpdi cr1");
+    check(one("cmpd r3, r4") == 0x7C232000, "cmpd");
+    check(one("cmpd cr1, r4, r5") == 0x7CA42800, "cmpd cr1");
+    check(one("ld r3, 8(r1)") == 0xE8610008, "ld");
+    check(one("ld r3, -8(r1)") == 0xE861FFF8, "ld negatif");
+    check(one("std r3, 8(r1)") == 0xF8610008, "std");
+    check(one("std r4, 16(r0)") == 0xF8800010, "std avec r0 : meme mot que base 0");
+    check(one("ld r5, 0(r6)") == 0xE8A60000, "ld sans deplacement");
+    {
+        bool refused = false;
+        try { one("ld r3, 6(r1)"); } catch (const ppc::AssemblyError&) { refused = true; }
+        check(refused, "ld : deplacement non multiple de 4 refuse");
+    }
     check(one("lis r3, 0x8200") == 0x3C608200, "lis");
     check(one("lis r3, -1") == 0x3C60FFFF, "lis negatif");
     check(one("addis r3, r4, -1") == 0x3C64FFFF, "addis");

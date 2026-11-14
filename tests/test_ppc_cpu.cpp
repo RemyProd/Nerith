@@ -252,6 +252,57 @@ int main() {
         cpu.gpr[3] = 7; cpu.gpr[4] = 0x100;
         check(step(cpu, memory) == Status::OutOfBounds && cpu.gpr[3] == 7 && cpu.pc == 0, "lwzx hors memoire");
     }
+    {   // cmpdi et cmpd : comparaison sur 64 bits
+        Memory memory(32);
+        load_words(memory, {
+            0x2C230000,   // cmpdi r3, 0
+            0x2CA30000,   // cmpdi cr1, r3, 0
+            0x7C232000,   // cmpd r3, r4
+            0x2C030000}); // cmpwi r3, 0  (pour comparer : seulement les 32 bits de poids faible)
+        Cpu cpu;
+        cpu.gpr[3] = 0x100000000ull;   // 2^32 : les 32 bits de poids faible valent 0
+        cpu.gpr[4] = 0x100000000ull;
+        step(cpu, memory);
+        check((cpu.cr >> 28) == 4, "cmpdi : 2^32 > 0 sur 64 bits (GT)");
+        cpu.gpr[3] = 0xFFFFFFFFFFFFFFFFull;   // -1 sur 64 bits
+        step(cpu, memory);
+        check(((cpu.cr >> 24) & 0xF) == 8, "cmpdi cr1 : -1 < 0 (LT)");
+        cpu.gpr[3] = 0x100000000ull;
+        step(cpu, memory);
+        check((cpu.cr >> 28) == 2, "cmpd : deux registres egaux (EQ)");
+        step(cpu, memory);
+        check((cpu.cr >> 28) == 2, "cmpwi sur le meme registre : les 32 bits de poids faible valent 0 (EQ)");
+    }
+    {   // ld et std : 64 bits, big-endian
+        Memory memory(64);
+        memory.write32(0x20, 0x11223344);
+        memory.write32(0x24, 0x55667788);
+        load_words(memory, {
+            0xE8600020,   // ld r3, 0x20(0)
+            0xF8600030,   // std r3, 0x30(0)
+            0xE8830000}); // ld r4, 0(r3)  : r3 vaut une grande valeur -> hors memoire
+        Cpu cpu;
+        step(cpu, memory);
+        check(cpu.gpr[3] == 0x1122334455667788ull, "ld : mot de poids fort a l'adresse la plus basse");
+        step(cpu, memory);
+        check(memory.read32(0x30) == 0x11223344 && memory.read32(0x34) == 0x55667788, "std : 8 octets ecrits");
+        cpu.gpr[4] = 9;
+        check(step(cpu, memory) == Status::OutOfBounds && cpu.gpr[4] == 9, "ld hors memoire : rien ne change");
+    }
+    {   // std a cheval sur la fin de la memoire : rien n'est ecrit
+        Memory memory(16);
+        load_words(memory, {0xF8600004});   // std r3, 4(0) : octets 4 a 11, ok
+        memory.write32(12, 0xF8600008);     // std r3, 8(0) : octets 8 a 15, ok aussi
+        Cpu cpu;
+        cpu.gpr[3] = 0xAAAAAAAABBBBBBBBull;
+        step(cpu, memory);
+        check(memory.read32(4) == 0xAAAAAAAA, "std dans la memoire");
+        Memory small(12);
+        small.write32(0, 0xF8600008);   // std r3, 8(0) : octets 8 a 15, mais la memoire fait 12
+        Cpu cpu2;
+        cpu2.gpr[3] = 0x1111111122222222ull;
+        check(step(cpu2, small) == Status::OutOfBounds && small.read32(8) == 0, "std a cheval : aucun octet ecrit");
+    }
     {   // mflr, mtlr
         Memory memory(16);
         load_words(memory, {

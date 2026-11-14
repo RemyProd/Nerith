@@ -34,6 +34,10 @@ enum class Kind {
     Lwzx,      // lwzx rD, rA, rB     (comme lwz, mais l'adresse est rA + rB ; rA = 0 veut dire le nombre 0)
     Stwx,      // stwx rS, rA, rB     (comme stw, adresse rA + rB)
     Lbzx,      // lbzx rD, rA, rB     (comme lbz, adresse rA + rB)
+    Cmpdi,     // cmpdi crfD, rA, SIMM (comme cmpwi, mais compare les 64 bits de rA)
+    Cmpd,      // cmpd crfD, rA, rB   (comme cmpw, mais compare les 64 bits)
+    Ld,        // ld rD, ds(rA)       (lire un mot de 64 bits ; ds est un multiple de 4)
+    Std,       // std rS, ds(rA)      (ecrire un mot de 64 bits)
     Stbx,      // stbx rS, rA, rB     (comme stb, adresse rA + rB)
 };
 

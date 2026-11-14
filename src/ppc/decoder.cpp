@@ -34,10 +34,26 @@ Instruction decode(std::uint32_t word) {
     result.word = word;
 
     switch (opcode_of(word)) {
-        case 11:   // cmpwi : seulement la forme 32 bits (L = 0)
-            if (((word >> 21) & 0x1) == 0) {
-                result.kind = Kind::Cmpwi;
-                result.crf = static_cast<std::uint8_t>((word >> 23) & 0x7);
+        case 11:   // cmpwi (L = 0, 32 bits) ou cmpdi (L = 1, 64 bits)
+            result.kind = ((word >> 21) & 0x1) == 0 ? Kind::Cmpwi : Kind::Cmpdi;
+            result.crf = static_cast<std::uint8_t>((word >> 23) & 0x7);
+            result.ra = field_11_15(word);
+            result.imm = simm16(word);
+            break;
+
+        case 58:   // ld : seulement la forme de base (les 2 bits de poids faible valent 0 ; 1 = ldu, 2 = lwa)
+            if ((word & 0x3) == 0) {
+                result.kind = Kind::Ld;
+                result.rd = field_6_10(word);
+                result.ra = field_11_15(word);
+                result.imm = simm16(word);
+            }
+            break;
+
+        case 62:   // std : seulement la forme de base (1 = stdu)
+            if ((word & 0x3) == 0) {
+                result.kind = Kind::Std;
+                result.rd = field_6_10(word);
                 result.ra = field_11_15(word);
                 result.imm = simm16(word);
             }
@@ -172,12 +188,10 @@ Instruction decode(std::uint32_t word) {
                             result.rb = 0;
                         }
                         break;
-                    case 0:   // cmpw : seulement la forme 32 bits (L = 0)
-                        if (((word >> 21) & 0x1) == 0) {
-                            result.kind = Kind::Cmpw;
-                            result.crf = static_cast<std::uint8_t>((word >> 23) & 0x7);
-                            result.rd = 0;
-                        }
+                    case 0:   // cmpw (L = 0, 32 bits) ou cmpd (L = 1, 64 bits)
+                        result.kind = ((word >> 21) & 0x1) == 0 ? Kind::Cmpw : Kind::Cmpd;
+                        result.crf = static_cast<std::uint8_t>((word >> 23) & 0x7);
+                        result.rd = 0;
                         break;
                     default: break;
                 }
@@ -242,11 +256,14 @@ std::string to_text(const Instruction& i) {
             return "or " + reg_name(i.ra) + ", " + reg_name(i.rd) + ", " + reg_name(i.rb);
 
         case Kind::Cmpw:
+        case Kind::Cmpd: {
+            const std::string name = i.kind == Kind::Cmpw ? "cmpw" : "cmpd";
             if (i.crf == 0) {
-                return "cmpw " + reg_name(i.ra) + ", " + reg_name(i.rb);
+                return name + " " + reg_name(i.ra) + ", " + reg_name(i.rb);
             }
-            return "cmpw cr" + std::to_string(static_cast<int>(i.crf)) + ", " + reg_name(i.ra) + ", " +
+            return name + " cr" + std::to_string(static_cast<int>(i.crf)) + ", " + reg_name(i.ra) + ", " +
                    reg_name(i.rb);
+        }
 
         case Kind::Stwu:
             return "stwu " + reg_name(i.rd) + ", " + std::to_string(i.imm) + "(" + reg_name(i.ra) + ")";
@@ -307,11 +324,20 @@ std::string to_text(const Instruction& i) {
         }
 
         case Kind::Cmpwi:
+        case Kind::Cmpdi: {
+            const std::string name = i.kind == Kind::Cmpwi ? "cmpwi" : "cmpdi";
             if (i.crf == 0) {
-                return "cmpwi " + reg_name(i.ra) + ", " + std::to_string(i.imm);
+                return name + " " + reg_name(i.ra) + ", " + std::to_string(i.imm);
             }
-            return "cmpwi cr" + std::to_string(static_cast<int>(i.crf)) + ", " + reg_name(i.ra) +
+            return name + " cr" + std::to_string(static_cast<int>(i.crf)) + ", " + reg_name(i.ra) +
                    ", " + std::to_string(i.imm);
+        }
+
+        case Kind::Ld:
+            return "ld " + reg_name(i.rd) + ", " + std::to_string(i.imm) + "(" + reg_name(i.ra) + ")";
+
+        case Kind::Std:
+            return "std " + reg_name(i.rd) + ", " + std::to_string(i.imm) + "(" + reg_name(i.ra) + ")";
 
         case Kind::Bc: {
             if (i.bo == 16 || i.bo == 18) {   // selon CTR, pas selon CR

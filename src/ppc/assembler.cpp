@@ -270,7 +270,7 @@ std::uint32_t encode(const Line& line, const std::map<std::string, std::size_t>&
         const std::uint32_t source = parse_register(line, op[1]);
         return 0x7C000378u | (source << 21) | (parse_register(line, op[0]) << 16) | (source << 11);
     }
-    if (m == "cmpw") {
+    if (m == "cmpw" || m == "cmpd") {   // cmpd : meme mot avec L = 1 (bit 21)
         std::uint32_t crf = 0;
         std::size_t first = 0;
         if (!op.empty() && looks_like_cr(to_lower(op[0]))) {
@@ -280,7 +280,7 @@ std::uint32_t encode(const Line& line, const std::map<std::string, std::size_t>&
         if (op.size() != first + 2) {
             throw AssemblyError(line.number, "forme attendue : cmpw [crN,] rA, rB");
         }
-        return 0x7C000000u | (crf << 23) | (parse_register(line, op[first]) << 16) |
+        return 0x7C000000u | (m == "cmpd" ? (1u << 21) : 0u) | (crf << 23) | (parse_register(line, op[first]) << 16) |
                (parse_register(line, op[first + 1]) << 11);
     }
     if (m == "ori") {   // ori rA, rS, constante
@@ -324,7 +324,18 @@ std::uint32_t encode(const Line& line, const std::map<std::string, std::size_t>&
         return (opcode << 26) | (parse_register(line, op[0]) << 21) | (base << 16) |
                (static_cast<std::uint32_t>(offset) & 0xFFFFu);
     }
-    if (m == "cmpwi") {
+    if (m == "ld" || m == "std") {   // ld rD, ds(rA) : ds multiple de 4
+        expect_operands(line, 2);
+        long long offset = 0;
+        std::uint32_t base = 0;
+        parse_memory_operand(line, op[1], offset, base);
+        if (offset % 4 != 0) {
+            throw AssemblyError(line.number, "le deplacement de ld/std doit etre un multiple de 4");
+        }
+        return ((m == "ld" ? 58u : 62u) << 26) | (parse_register(line, op[0]) << 21) | (base << 16) |
+               (static_cast<std::uint32_t>(offset) & 0xFFFCu);
+    }
+    if (m == "cmpwi" || m == "cmpdi") {
         std::uint32_t crf = 0;
         std::size_t first = 0;
         if (!op.empty() && looks_like_cr(to_lower(op[0]))) {
@@ -334,7 +345,7 @@ std::uint32_t encode(const Line& line, const std::map<std::string, std::size_t>&
         if (op.size() != first + 2) {
             throw AssemblyError(line.number, "forme attendue : cmpwi [crN,] rA, nombre");
         }
-        return (11u << 26) | (crf << 23) | (parse_register(line, op[first]) << 16) |
+        return (11u << 26) | (m == "cmpdi" ? (1u << 21) : 0u) | (crf << 23) | (parse_register(line, op[first]) << 16) |
                (static_cast<std::uint32_t>(parse_value(line, op[first + 1], -32768, 32767)) & 0xFFFFu);
     }
     if (m == "b" || m == "bl") {

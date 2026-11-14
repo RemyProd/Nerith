@@ -18,8 +18,8 @@ std::uint64_t add_signed(std::uint64_t value, std::int32_t offset) {
     return value + static_cast<std::uint64_t>(static_cast<std::int64_t>(offset));
 }
 
-// Ecrit le resultat d'une comparaison avec signe (32 bits) dans le champ crf de CR.
-void set_cr_field(Cpu& cpu, std::uint8_t crf, std::int32_t a, std::int32_t b) {
+// Ecrit le resultat d'une comparaison avec signe (32 ou 64 bits, deja convertis en 64) dans le champ crf de CR.
+void set_cr_field(Cpu& cpu, std::uint8_t crf, std::int64_t a, std::int64_t b) {
     const std::uint32_t bits = a < b ? 8u : (a > b ? 4u : 2u);   // LT, GT ou EQ
     const unsigned shift = 4u * (7u - crf);
     cpu.cr = (cpu.cr & ~(0xFu << shift)) | (bits << shift);
@@ -63,6 +63,17 @@ Status step(Cpu& cpu, Memory& memory) {
 
             case Kind::Cmpwi:
                 set_cr_field(cpu, i.crf, low32(cpu.gpr[i.ra]), i.imm);
+                cpu.pc = next;
+                return Status::Running;
+
+            case Kind::Cmpdi:   // comparaison sur les 64 bits
+                set_cr_field(cpu, i.crf, static_cast<std::int64_t>(cpu.gpr[i.ra]), i.imm);
+                cpu.pc = next;
+                return Status::Running;
+
+            case Kind::Cmpd:
+                set_cr_field(cpu, i.crf, static_cast<std::int64_t>(cpu.gpr[i.ra]),
+                             static_cast<std::int64_t>(cpu.gpr[i.rb]));
                 cpu.pc = next;
                 return Status::Running;
 
@@ -172,6 +183,25 @@ Status step(Cpu& cpu, Memory& memory) {
             case Kind::Stbx: {
                 const std::uint64_t address = base_value(cpu, i.ra) + cpu.gpr[i.rb];
                 memory.write8(static_cast<std::size_t>(address), static_cast<std::uint8_t>(cpu.gpr[i.rd]));
+                cpu.pc = next;
+                return Status::Running;
+            }
+
+            case Kind::Ld: {   // 64 bits en big-endian : le mot de poids fort est a l'adresse la plus basse
+                const std::size_t address = static_cast<std::size_t>(add_signed(base_value(cpu, i.ra), i.imm));
+                const std::uint64_t high = memory.read32(address);
+                const std::uint64_t low = memory.read32(address + 4);
+                cpu.gpr[i.rd] = (high << 32) | low;
+                cpu.pc = next;
+                return Status::Running;
+            }
+
+            case Kind::Std: {
+                const std::size_t address = static_cast<std::size_t>(add_signed(base_value(cpu, i.ra), i.imm));
+                (void)memory.read32(address + 4);   // verifie que les 8 octets existent avant d'ecrire quoi que ce soit
+                (void)memory.read32(address);
+                memory.write32(address, static_cast<std::uint32_t>(cpu.gpr[i.rd] >> 32));
+                memory.write32(address + 4, static_cast<std::uint32_t>(cpu.gpr[i.rd]));
                 cpu.pc = next;
                 return Status::Running;
             }

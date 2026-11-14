@@ -59,7 +59,8 @@ int main() {
     check(text(0x4082FFF8) == "bne -8", "bne");
     check(text(0x4180FFFC) == "blt -4", "blt");
     check(text(0x40850008) == "ble cr1, +8", "ble cr1");
-    check(decode(0x2C230000).kind == Kind::Unknown, "cmpdi (64 bits) pas encore gere");
+    check(text(0x2C230000) == "cmpdi r3, 0", "cmpdi");
+    check(text(0x2CA300FF) == "cmpdi cr1, r3, 255", "cmpdi cr1");
 
     // instructions ajoutees ensuite (mots verifies avec llvm-mc)
     check(text(0x7C652050) == "sub r3, r4, r5", "sub");
@@ -78,7 +79,14 @@ int main() {
     check(text(0x3C608200) == "lis r3, 0x8200", "lis");
     check(text(0x3C640001) == "addis r3, r4, 1", "addis");
     check(decode(0x7C652051).kind == Kind::Unknown, "sub. (Rc = 1) pas encore gere");
-    check(decode(0x7C200000).kind == Kind::Unknown, "cmpd (64 bits) pas encore gere");
+    check(text(0x7C232000) == "cmpd r3, r4", "cmpd");
+    check(text(0x7CA42800) == "cmpd cr1, r4, r5", "cmpd cr1");
+    check(text(0xE8610008) == "ld r3, 8(r1)", "ld");
+    check(text(0xE861FFF8) == "ld r3, -8(r1)", "ld negatif");
+    check(text(0xF8610008) == "std r3, 8(r1)", "std");
+    check(decode(0xE8610009).kind == Kind::Unknown, "ldu (bits 01) pas encore gere");
+    check(decode(0xE8610002).kind == Kind::Unknown, "lwa (bits 10) pas encore gere");
+    check(decode(0xF8610001).kind == Kind::Unknown, "stdu (bits 01) pas encore gere");
 
     // pile et lr (mots verifies avec llvm-mc)
     check(text(0x7C0802A6) == "mflr r0", "mflr");
