@@ -16,7 +16,7 @@ function(nerith_module name)
 endfunction()
 
 # --- Modules (bibliotheques) ---
-# Dependances : toy -> memory ; util, memory et ppc ne dependent de rien (pour l'instant).
+# Dependances : toy -> memory ; ppc -> memory ; util et memory ne dependent de rien.
 
 # util : outils generaux (fichiers, logs)
 add_library(nerith_util
@@ -40,11 +40,13 @@ add_library(nerith_toy
 nerith_module(nerith_toy)
 target_link_libraries(nerith_toy PUBLIC nerith_memory)
 
-# ppc : le CPU de la Xbox 360 (PowerPC) ; pour l'instant, seulement le decodeur
+# ppc : le CPU de la Xbox 360 (PowerPC) ; pour l'instant, le decodeur et le desassembleur
 add_library(nerith_ppc
     src/ppc/decoder.cpp
+    src/ppc/disassembler.cpp
 )
 nerith_module(nerith_ppc)
+target_link_libraries(nerith_ppc PUBLIC nerith_memory)
 
 # --- Programme principal ---
 add_executable(nerith src/main.cpp)
@@ -66,3 +68,4 @@ nerith_test(cpu          nerith_toy)
 nerith_test(assembler    nerith_toy)
 nerith_test(disassembler nerith_toy)
 nerith_test(ppc_decoder  nerith_ppc)
+nerith_test(ppc_disassembler nerith_ppc)
