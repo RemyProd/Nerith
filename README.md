@@ -2,7 +2,7 @@
 
 Projet de recherche et de développement d'un émulateur Xbox 360 indépendant pour PC (Windows), écrit en C++.
 
-> **Statut : phase 4 commencée. Un CPU pédagogique (11 instructions) et un tout début d'interpréteur PowerPC (une vingtaine d'instructions : arithmétique, mémoire, sauts, appels de fonction avec pile) avec assembleur, désassembleur et tests automatiques sont fonctionnels. Ce n'est pas encore un émulateur : il ne lit aucun exécutable Xbox 360 et ne lance aucun jeu.**
+> **Statut : phase 4 commencée. Un CPU pédagogique (11 instructions) et un début d'interpréteur PowerPC (environ 105 formes d'instructions entières : arithmétique, logique, décalages, rotations, comparaisons, mémoire de 8 à 64 bits, sauts, appels de fonction avec pile) avec assembleur, désassembleur et tests automatiques sont fonctionnels. Ce n'est pas encore un émulateur : il ne lit aucun exécutable Xbox 360 et ne lance aucun jeu.**
 
 *Nerith est un nom de travail provisoire : il peut changer avant la première version publique.*
 
@@ -82,6 +82,7 @@ Pour lancer un programme PowerPC écrit en texte (option `--ppc`, qui se combine
 ```powershell
 .\build\Debug\nerith.exe --ppc --trace examples\somme_ppc.s
 .\build\Debug\nerith.exe --ppc examples\factorielle_recursive_ppc.s
+.\build\Debug\nerith.exe --ppc examples\crc32_ppc.s
 ```
 
 Pour afficher l'en-tête d'un fichier `.xex` (Xbox 360) que tu possèdes, sans le déchiffrer ni le décompresser :

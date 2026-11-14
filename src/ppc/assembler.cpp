@@ -3,6 +3,8 @@
 #include <cctype>
 #include <map>
 
+#include "nerith/ppc/optable.h"
+
 namespace nerith::ppc {
 
 AssemblyError::AssemblyError(std::size_t line, const std::string& message)
@@ -196,6 +198,148 @@ std::uint32_t rlwinm_word(std::uint32_t ra, std::uint32_t rs, std::uint32_t sh, 
     return (21u << 26) | (rs << 21) | (ra << 16) | (sh << 11) | (mb << 6) | (me << 1);
 }
 
+// "[crN,]" au debut des operandes : renvoie le numero du champ et dit combien d'operandes il a pris.
+std::uint32_t parse_optional_cr(const Line& line, std::size_t& first) {
+    first = 0;
+    if (!line.operands.empty() && looks_like_cr(to_lower(line.operands[0]))) {
+        first = 1;
+        return static_cast<std::uint32_t>(line.operands[0][2] - '0');
+    }
+    return 0;
+}
+
+// Rotations 64 bits (forme MD) : rldicl, rldicr, rldic, rldimi.
+// Les 6 bits de sh sont coupes en deux (5 bits + 1 bit a droite), et ceux de mb/me sont "retournes".
+std::uint32_t rld_word(std::uint32_t xo, std::uint32_t ra, std::uint32_t rs, std::uint32_t sh, std::uint32_t mask_bit) {
+    const std::uint32_t raw = ((mask_bit & 0x1Fu) << 1) | (mask_bit >> 5);
+    return (30u << 26) | (rs << 21) | (ra << 16) | ((sh & 0x1Fu) << 11) | (raw << 5) | (xo << 2) |
+           ((sh >> 5) << 1);
+}
+
+// Les instructions de la table (optable.cpp) : mot de base + champs selon leur disposition.
+std::uint32_t encode_table_op(const Line& line, const OpInfo& info) {
+    const auto& op = line.operands;
+    std::uint32_t word = info.opcode << 26;
+    if (info.opcode == 31) {
+        word |= static_cast<std::uint32_t>(info.xo) << 1;
+    } else if (info.opcode == 58 || info.opcode == 62) {
+        word |= static_cast<std::uint32_t>(info.xo);
+    }
+    switch (info.layout) {
+        case Layout::RtRaRb:
+            expect_operands(line, 3);
+            return word | (parse_register(line, op[0]) << 21) | (parse_register(line, op[1]) << 16) |
+                   (parse_register(line, op[2]) << 11);
+        case Layout::RaRsRb:   // rA, rS, rB : la destination est rA
+            expect_operands(line, 3);
+            return word | (parse_register(line, op[1]) << 21) | (parse_register(line, op[0]) << 16) |
+                   (parse_register(line, op[2]) << 11);
+        case Layout::RaRs:
+            expect_operands(line, 2);
+            return word | (parse_register(line, op[1]) << 21) | (parse_register(line, op[0]) << 16);
+        case Layout::RtRa:
+            expect_operands(line, 2);
+            return word | (parse_register(line, op[0]) << 21) | (parse_register(line, op[1]) << 16);
+        case Layout::RtRaSimm:
+            expect_operands(line, 3);
+            return word | (parse_register(line, op[0]) << 21) | (parse_register(line, op[1]) << 16) |
+                   (static_cast<std::uint32_t>(parse_value(line, op[2], -32768, 32767)) & 0xFFFFu);
+        case Layout::RaRsUimm:
+            expect_operands(line, 3);
+            return word | (parse_register(line, op[1]) << 21) | (parse_register(line, op[0]) << 16) |
+                   static_cast<std::uint32_t>(parse_value(line, op[2], 0, 65535));
+        case Layout::MemD:
+        case Layout::MemDS: {
+            expect_operands(line, 2);
+            long long offset = 0;
+            std::uint32_t base = 0;
+            parse_memory_operand(line, op[1], offset, base);
+            if (info.layout == Layout::MemDS && offset % 4 != 0) {
+                throw AssemblyError(line.number, "le deplacement de " + line.mnemonic + " doit etre un multiple de 4");
+            }
+            return word | (parse_register(line, op[0]) << 21) | (base << 16) |
+                   (static_cast<std::uint32_t>(offset) & (info.layout == Layout::MemDS ? 0xFFFCu : 0xFFFFu));
+        }
+        case Layout::MemX:   // rD, rA (ou 0), rB
+            expect_operands(line, 3);
+            return word | (parse_register(line, op[0]) << 21) | (parse_index_base(line, op[1]) << 16) |
+                   (parse_register(line, op[2]) << 11);
+    }
+    throw AssemblyError(line.number, "instruction inconnue : " + line.mnemonic);
+}
+
+// Raccourcis et formes a plusieurs operandes qui ne rentrent pas dans la table.
+// Renvoie false si le mnemonique n'est pas l'un d'eux.
+bool encode_extra(const Line& line, std::uint32_t& word) {
+    const std::string& m = line.mnemonic;
+    const auto& op = line.operands;
+
+    if (m == "not") {   // not rA, rS = nor rA, rS, rS
+        expect_operands(line, 2);
+        const std::uint32_t rs = parse_register(line, op[1]);
+        word = (31u << 26) | (124u << 1) | (rs << 21) | (parse_register(line, op[0]) << 16) | (rs << 11);
+        return true;
+    }
+    if (m == "rotlw") {   // rotlw rA, rS, rB = rlwnm rA, rS, rB, 0, 31
+        expect_operands(line, 3);
+        word = (23u << 26) | (parse_register(line, op[1]) << 21) | (parse_register(line, op[0]) << 16) |
+               (parse_register(line, op[2]) << 11) | (31u << 1);
+        return true;
+    }
+    if (m == "rlwimi" || m == "rlwnm") {   // rlwimi rA, rS, SH, MB, ME  /  rlwnm rA, rS, rB, MB, ME
+        expect_operands(line, 5);
+        const bool imm = m == "rlwimi";
+        const std::uint32_t third = imm ? static_cast<std::uint32_t>(parse_value(line, op[2], 0, 31))
+                                        : parse_register(line, op[2]);
+        word = ((imm ? 20u : 23u) << 26) | (parse_register(line, op[1]) << 21) | (parse_register(line, op[0]) << 16) |
+               (third << 11) | (static_cast<std::uint32_t>(parse_value(line, op[3], 0, 31)) << 6) |
+               (static_cast<std::uint32_t>(parse_value(line, op[4], 0, 31)) << 1);
+        return true;
+    }
+    if (m == "rldicl" || m == "rldicr" || m == "rldic" || m == "rldimi") {   // rA, rS, SH, MB (ME pour rldicr)
+        expect_operands(line, 4);
+        const std::uint32_t xo = m == "rldicl" ? 0u : (m == "rldicr" ? 1u : (m == "rldic" ? 2u : 3u));
+        word = rld_word(xo, parse_register(line, op[0]), parse_register(line, op[1]),
+                        static_cast<std::uint32_t>(parse_value(line, op[2], 0, 63)),
+                        static_cast<std::uint32_t>(parse_value(line, op[3], 0, 63)));
+        return true;
+    }
+    if (m == "sldi" || m == "srdi" || m == "clrldi" || m == "rotldi" || m == "clrrdi") {
+        expect_operands(line, 3);
+        const std::uint32_t ra = parse_register(line, op[0]);
+        const std::uint32_t rs = parse_register(line, op[1]);
+        const std::uint32_t n = static_cast<std::uint32_t>(parse_value(line, op[2], 0, 63));
+        if (m == "sldi")   { word = rld_word(1, ra, rs, n, 63 - n); return true; }
+        if (m == "srdi")   { word = rld_word(0, ra, rs, (64 - n) & 63u, n); return true; }
+        if (m == "clrldi") { word = rld_word(0, ra, rs, 0, n); return true; }
+        if (m == "clrrdi") { word = rld_word(1, ra, rs, 0, 63 - n); return true; }
+        word = rld_word(0, ra, rs, n, 0);   // rotldi
+        return true;
+    }
+    if (m == "cmplwi" || m == "cmpldi") {   // [crN,] rA, nombre sans signe
+        std::size_t first = 0;
+        const std::uint32_t crf = parse_optional_cr(line, first);
+        if (op.size() != first + 2) {
+            throw AssemblyError(line.number, "forme attendue : " + m + " [crN,] rA, nombre");
+        }
+        word = (10u << 26) | (m == "cmpldi" ? (1u << 21) : 0u) | (crf << 23) |
+               (parse_register(line, op[first]) << 16) |
+               static_cast<std::uint32_t>(parse_value(line, op[first + 1], 0, 65535));
+        return true;
+    }
+    if (m == "cmplw" || m == "cmpld") {   // [crN,] rA, rB
+        std::size_t first = 0;
+        const std::uint32_t crf = parse_optional_cr(line, first);
+        if (op.size() != first + 2) {
+            throw AssemblyError(line.number, "forme attendue : " + m + " [crN,] rA, rB");
+        }
+        word = (31u << 26) | (32u << 1) | (m == "cmpld" ? (1u << 21) : 0u) | (crf << 23) |
+               (parse_register(line, op[first]) << 16) | (parse_register(line, op[first + 1]) << 11);
+        return true;
+    }
+    return false;
+}
+
 std::uint32_t encode(const Line& line, const std::map<std::string, std::size_t>& labels) {
     const std::string& m = line.mnemonic;
     const auto& op = line.operands;
@@ -377,6 +521,13 @@ std::uint32_t encode(const Line& line, const std::map<std::string, std::size_t>&
         }
         return (16u << 26) | (bo << 21) | ((crf * 4 + bit) << 16) |
                (static_cast<std::uint32_t>(offset) & 0xFFFCu);
+    }
+    if (const OpInfo* info = find_op(m)) {
+        return encode_table_op(line, *info);
+    }
+    std::uint32_t word = 0;
+    if (encode_extra(line, word)) {
+        return word;
     }
     throw AssemblyError(line.number, "instruction inconnue : " + m);
 }

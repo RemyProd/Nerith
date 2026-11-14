@@ -1,0 +1,354 @@
+// Tests de ce que FONT les instructions de la table (optable.cpp) : logique, decalages, multiplications,
+// divisions, comparaisons sans signe, rotations, acces memoire de 16 bits, indexes, avec mise a jour, inverses.
+// Les valeurs attendues sont calculees a la main (le manuel PowerPC donne les formules).
+#include <cstdint>
+#include <initializer_list>
+#include <iostream>
+#include <string>
+#include <utility>
+
+#include "nerith/memory/memory.h"
+#include "nerith/ppc/assembler.h"
+#include "nerith/ppc/cpu.h"
+#include "nerith/ppc/decoder.h"
+#include "nerith/ppc/optable.h"
+
+namespace {
+
+using nerith::Memory;
+using nerith::ppc::Cpu;
+using nerith::ppc::Status;
+
+int failures = 0;
+
+void check(bool condition, const std::string& name) {
+    if (!condition) {
+        std::cerr << "ECHEC : " << name << "\n";
+        ++failures;
+    }
+}
+
+void check_value(std::uint64_t actual, std::uint64_t expected, const std::string& name) {
+    if (actual != expected) {
+        std::cerr << "ECHEC : " << name << " : obtenu 0x" << std::hex << actual << " au lieu de 0x" << expected
+                  << std::dec << "\n";
+        ++failures;
+    }
+}
+
+using Regs = std::initializer_list<std::pair<int, std::uint64_t>>;
+
+// Execute UNE instruction (a l'adresse 0) apres avoir donne leur valeur a quelques registres.
+// La memoire fait 256 octets ; "memory" peut etre preparee a l'avance (l'instruction est ecrite en 0).
+Cpu exec(const std::string& line, Regs regs, Memory& memory, Status* status = nullptr) {
+    memory.write32(0, nerith::ppc::assemble(line).at(0));
+    Cpu cpu;
+    for (const auto& [number, value] : regs) {
+        cpu.gpr[static_cast<std::size_t>(number)] = value;
+    }
+    const Status result = nerith::ppc::step(cpu, memory);
+    if (status != nullptr) {
+        *status = result;
+    } else {
+        check(result == Status::Running, line + " : doit s'executer");
+    }
+    return cpu;
+}
+
+Cpu exec(const std::string& line, Regs regs) {
+    Memory memory(256);
+    return exec(line, regs, memory);
+}
+
+}  // namespace
+
+int main() {
+    using namespace nerith::ppc;
+
+    // --- logique ---
+    {
+        const Regs in = {{4, 0xF0F0F0F0F0F0F0F0ull}, {5, 0x00FF00FF00FF00FFull}};
+        check_value(exec("and r3, r4, r5", in).gpr[3], 0x00F000F000F000F0ull, "and");
+        check_value(exec("andc r3, r4, r5", in).gpr[3], 0xF000F000F000F000ull, "andc");
+        check_value(exec("xor r3, r4, r5", in).gpr[3], 0xF00FF00FF00FF00Full, "xor");
+        check_value(exec("nor r3, r4, r5", in).gpr[3], 0x0F000F000F000F00ull, "nor");
+        check_value(exec("nand r3, r4, r5", in).gpr[3], 0xFF0FFF0FFF0FFF0Full, "nand");
+        check_value(exec("orc r3, r4, r5", in).gpr[3], 0xFFF0FFF0FFF0FFF0ull, "orc");
+        check_value(exec("eqv r3, r4, r5", in).gpr[3], 0x0FF00FF00FF00FF0ull, "eqv");
+        check_value(exec("not r3, r4", in).gpr[3], 0x0F0F0F0F0F0F0F0Full, "not");
+        check_value(exec("neg r3, r4", {{4, 5}}).gpr[3], 0xFFFFFFFFFFFFFFFBull, "neg 5");
+        check_value(exec("neg r3, r4", {{4, 0}}).gpr[3], 0, "neg 0");
+        // la destination est rA : rS ne change pas
+        check_value(exec("and r3, r4, r5", in).gpr[4], 0xF0F0F0F0F0F0F0F0ull, "and : rS inchange");
+    }
+
+    // --- decalages ---
+    {
+        check_value(exec("slw r3, r4, r5", {{4, 0x180000001ull}, {5, 1}}).gpr[3], 0x2, "slw 1 : seuls les 32 bits bas comptent");
+        check_value(exec("slw r3, r4, r5", {{4, 0x80000001ull}, {5, 31}}).gpr[3], 0x80000000ull, "slw 31");
+        check_value(exec("slw r3, r4, r5", {{4, 0xFFFFFFFFull}, {5, 32}}).gpr[3], 0, "slw 32 : tout est perdu");
+        check_value(exec("srw r3, r4, r5", {{4, 0xFFFFFFFF80000000ull}, {5, 4}}).gpr[3], 0x08000000, "srw 4");
+        check_value(exec("srw r3, r4, r5", {{4, 0x80000000ull}, {5, 35}}).gpr[3], 0, "srw 35 (> 31)");
+        check_value(exec("sld r3, r4, r5", {{4, 1}, {5, 63}}).gpr[3], 0x8000000000000000ull, "sld 63");
+        check_value(exec("sld r3, r4, r5", {{4, 1}, {5, 64}}).gpr[3], 0, "sld 64");
+        check_value(exec("srd r3, r4, r5", {{4, 0x8000000000000000ull}, {5, 63}}).gpr[3], 1, "srd 63");
+        check_value(exec("srd r3, r4, r5", {{4, 0x8000000000000000ull}, {5, 65}}).gpr[3], 0, "srd 65");
+        check_value(exec("cntlzw r3, r4", {{4, 0x00010000}}).gpr[3], 15, "cntlzw");
+        check_value(exec("cntlzw r3, r4", {{4, 0}}).gpr[3], 32, "cntlzw 0");
+        check_value(exec("cntlzw r3, r4", {{4, 0xFFFFFFFF00000001ull}}).gpr[3], 31, "cntlzw : seuls les 32 bits bas");
+        check_value(exec("cntlzd r3, r4", {{4, 1}}).gpr[3], 63, "cntlzd 1");
+        check_value(exec("cntlzd r3, r4", {{4, 0}}).gpr[3], 64, "cntlzd 0");
+        check_value(exec("extsb r3, r4", {{4, 0x80}}).gpr[3], 0xFFFFFFFFFFFFFF80ull, "extsb negatif");
+        check_value(exec("extsb r3, r4", {{4, 0x12345680}}).gpr[3], 0xFFFFFFFFFFFFFF80ull, "extsb : un seul octet compte");
+        check_value(exec("extsb r3, r4", {{4, 0x7F}}).gpr[3], 0x7F, "extsb positif");
+        check_value(exec("extsh r3, r4", {{4, 0x8000}}).gpr[3], 0xFFFFFFFFFFFF8000ull, "extsh");
+        check_value(exec("extsw r3, r4", {{4, 0x80000000ull}}).gpr[3], 0xFFFFFFFF80000000ull, "extsw negatif");
+        check_value(exec("extsw r3, r4", {{4, 0x17FFFFFFFull}}).gpr[3], 0x7FFFFFFF, "extsw positif");
+    }
+
+    // --- multiplications et divisions ---
+    {
+        check_value(exec("mulli r3, r4, -5", {{4, 7}}).gpr[3], 0xFFFFFFFFFFFFFFDDull, "mulli");
+        check_value(exec("mulld r3, r4, r5", {{4, 3}, {5, 0xFFFFFFFFFFFFFFFCull}}).gpr[3], 0xFFFFFFFFFFFFFFF4ull, "mulld 3 * -4");
+        check_value(exec("mulld r3, r4, r5", {{4, 0x100000000ull}, {5, 0x100000000ull}}).gpr[3], 0, "mulld : 2^64 boucle sur 0");
+        check_value(exec("mulhw r3, r4, r5", {{4, 0x7FFFFFFF}, {5, 0x7FFFFFFF}}).gpr[3], 0x3FFFFFFF, "mulhw");
+        check_value(exec("mulhw r3, r4, r5", {{4, 0xFFFFFFFF}, {5, 2}}).gpr[3], 0xFFFFFFFFFFFFFFFFull, "mulhw : -1 * 2");
+        check_value(exec("mulhwu r3, r4, r5", {{4, 0xFFFFFFFF}, {5, 2}}).gpr[3], 1, "mulhwu");
+        check_value(exec("divw r3, r4, r5", {{4, 7}, {5, 2}}).gpr[3], 3, "divw 7 / 2");
+        check_value(exec("divw r3, r4, r5", {{4, 0x1234FFFFFFF9ull}, {5, 2}}).gpr[3], 0xFFFFFFFFFFFFFFFDull, "divw -7 / 2 (32 bits bas)");
+        check_value(exec("divw r3, r4, r5", {{4, 7}, {5, 0}}).gpr[3], 0, "divw par 0 : Nerith met 0");
+        check_value(exec("divw r3, r4, r5", {{4, 0x80000000ull}, {5, 0xFFFFFFFFull}}).gpr[3], 0, "divw INT_MIN / -1 : Nerith met 0");
+        check_value(exec("divwu r3, r4, r5", {{4, 0xFFFFFFFEull}, {5, 2}}).gpr[3], 0x7FFFFFFF, "divwu");
+        check_value(exec("divwu r3, r4, r5", {{4, 5}, {5, 0}}).gpr[3], 0, "divwu par 0");
+        check_value(exec("divd r3, r4, r5", {{4, 0xFFFFFFFFFFFFFFF9ull}, {5, 2}}).gpr[3], 0xFFFFFFFFFFFFFFFDull, "divd -7 / 2");
+        check_value(exec("divd r3, r4, r5", {{4, 0x8000000000000000ull}, {5, 0xFFFFFFFFFFFFFFFFull}}).gpr[3], 0, "divd INT64_MIN / -1");
+        check_value(exec("divdu r3, r4, r5", {{4, 0xFFFFFFFFFFFFFFFEull}, {5, 2}}).gpr[3], 0x7FFFFFFFFFFFFFFFull, "divdu");
+    }
+
+    // --- nombres de 16 bits ---
+    {
+        check_value(exec("oris r3, r4, 0x1234", {{4, 0xF}}).gpr[3], 0x1234000F, "oris");
+        check_value(exec("xori r3, r4, 0x0F", {{4, 0xFF}}).gpr[3], 0xF0, "xori");
+        check_value(exec("xoris r3, r4, 0xFFFF", {{4, 0}}).gpr[3], 0xFFFF0000ull, "xoris");
+        {
+            const Cpu cpu = exec("andi. r3, r4, 0xFF", {{4, 0xFFFF1234ull}});
+            check_value(cpu.gpr[3], 0x34, "andi. : resultat");
+            check_value(cpu.cr, 0x40000000, "andi. : cr0 = GT");
+        }
+        {
+            Memory memory(256);
+            memory.write32(0, 0);
+            const Cpu cpu = exec("andi. r3, r4, 0xFF", {{4, 0x100}}, memory);
+            check_value(cpu.gpr[3], 0, "andi. zero");
+            check_value(cpu.cr, 0x20000000, "andi. : cr0 = EQ");
+        }
+        {   // les autres champs de CR ne bougent pas
+            Memory memory(256);
+            memory.write32(0, nerith::ppc::assemble("andi. r3, r4, 1").at(0));
+            Cpu cpu;
+            cpu.cr = 0x0FFFFFFF;
+            cpu.gpr[4] = 1;
+            nerith::ppc::step(cpu, memory);
+            check_value(cpu.cr, 0x4FFFFFFF, "andi. : seul cr0 change");
+        }
+        {
+            const Cpu cpu = exec("andis. r3, r4, 0xFF", {{4, 0xFFFF1234ull}});
+            check_value(cpu.gpr[3], 0x00FF0000, "andis. : resultat");
+            check_value(cpu.cr, 0x40000000, "andis. : cr0 = GT");
+        }
+    }
+
+    // --- comparaisons sans signe ---
+    {
+        check_value(exec("cmplwi r3, 5", {{3, 0xFFFFFFFFull}}).cr, 0x40000000, "cmplwi : 0xFFFFFFFF > 5 sans signe");
+        check_value(exec("cmpwi r3, 5", {{3, 0xFFFFFFFFull}}).cr, 0x80000000, "cmpwi : -1 < 5 avec signe (pour comparer)");
+        check_value(exec("cmplwi cr1, r3, 5", {{3, 5}}).cr, 0x02000000, "cmplwi cr1 : EQ");
+        check_value(exec("cmpldi r3, 5", {{3, 0x100000000ull}}).cr, 0x40000000, "cmpldi : 2^32 > 5");
+        check_value(exec("cmpldi r3, 5", {{3, 0}}).cr, 0x80000000, "cmpldi : 0 < 5");
+        check_value(exec("cmplw r3, r4", {{3, 0x100000001ull}, {4, 2}}).cr, 0x80000000, "cmplw : 32 bits bas, 1 < 2");
+        check_value(exec("cmpld r3, r4", {{3, 0x100000001ull}, {4, 2}}).cr, 0x40000000, "cmpld : 64 bits, plus grand");
+        check_value(exec("cmpld r3, r4", {{3, 0xFFFFFFFFFFFFFFFFull}, {4, 0}}).cr, 0x40000000, "cmpld : sans signe");
+        check_value(exec("cmpd r3, r4", {{3, 0xFFFFFFFFFFFFFFFFull}, {4, 0}}).cr, 0x80000000, "cmpd : avec signe (pour comparer)");
+    }
+
+    // --- rotations ---
+    {
+        check_value(exec("rlwimi r3, r4, 8, 24, 31", {{3, 0xDEADBEEF11223344ull}, {4, 0xAB000000ull}}).gpr[3],
+                    0xDEADBEEF112233ABull, "rlwimi : insere un octet, le haut de rA ne bouge pas");
+        check_value(exec("rlwnm r3, r4, r5, 0, 31", {{4, 0x80000001ull}, {5, 1}}).gpr[3], 3, "rlwnm : rotation de 1");
+        check_value(exec("rlwnm r3, r4, r5, 0, 31", {{4, 0x80000001ull}, {5, 33}}).gpr[3], 3, "rlwnm : 5 bits de rB seulement");
+        check_value(exec("rlwnm r3, r4, r5, 8, 15", {{4, 0x12345678ull}, {5, 8}}).gpr[3], 0x00560000, "rlwnm avec masque");
+        const std::uint64_t value = 0x1234567890ABCDEFull;
+        check_value(exec("clrldi r3, r4, 32", {{4, value}}).gpr[3], 0x90ABCDEFull, "clrldi 32");
+        check_value(exec("srdi r3, r4, 8", {{4, value}}).gpr[3], 0x001234567890ABCDull, "srdi 8");
+        check_value(exec("rotldi r3, r4, 4", {{4, value}}).gpr[3], 0x234567890ABCDEF1ull, "rotldi 4");
+        check_value(exec("sldi r3, r4, 8", {{4, value}}).gpr[3], 0x34567890ABCDEF00ull, "sldi 8");
+        check_value(exec("clrrdi r3, r4, 16", {{4, value}}).gpr[3], 0x1234567890AB0000ull, "clrrdi 16");
+        check_value(exec("rldic r3, r4, 8, 16", {{4, value}}).gpr[3], 0x00007890ABCDEF00ull, "rldic");
+        check_value(exec("rldimi r3, r4, 8, 16", {{3, 0xFFFFFFFFFFFFFFFFull}, {4, value}}).gpr[3], 0xFFFF7890ABCDEFFFull, "rldimi");
+        check_value(exec("sldi r3, r4, 0", {{4, value}}).gpr[3], value, "sldi 0 : rien ne change");
+    }
+
+    // --- memoire : 16 bits ---
+    {
+        Memory memory(256);
+        memory.write32(0x20, 0x80017FFF);
+        check_value(exec("lhz r3, 32(r0)", {}, memory).gpr[3], 0x8001, "lhz");
+        check_value(exec("lhz r3, 34(r0)", {}, memory).gpr[3], 0x7FFF, "lhz 2");
+        check_value(exec("lha r3, 32(r0)", {}, memory).gpr[3], 0xFFFFFFFFFFFF8001ull, "lha negatif");
+        check_value(exec("lha r3, 34(r0)", {}, memory).gpr[3], 0x7FFF, "lha positif");
+        memory.write32(0x30, 0x11223344);
+        exec("sth r3, 48(r0)", {{3, 0x1234ABCDull}}, memory);
+        check_value(memory.read32(0x30), 0xABCD3344, "sth : 2 octets seulement, big-endian");
+    }
+
+    // --- memoire : avec mise a jour (u) ---
+    {
+        Memory memory(256);
+        memory.write32(0x28, 0xCAFEBABE);
+        const Cpu cpu = exec("lwzu r3, 8(r4)", {{4, 0x20}}, memory);
+        check_value(cpu.gpr[3], 0xCAFEBABE, "lwzu : valeur");
+        check_value(cpu.gpr[4], 0x28, "lwzu : rA = adresse");
+        Status status = Status::Running;
+        const Cpu same = exec("lwzu r4, 8(r4)", {{4, 0x20}}, memory, &status);
+        check(status == Status::InvalidInstruction && same.gpr[4] == 0x20, "lwzu avec rA = rD : invalide");
+        exec("lwzu r3, 8(r0)", {}, memory, &status);
+        check(status == Status::InvalidInstruction, "lwzu avec rA = 0 : invalide");
+        const Cpu st = exec("stbu r3, 1(r4)", {{3, 0xAA}, {4, 0x40}}, memory);
+        check(memory.read8(0x41) == 0xAA && st.gpr[4] == 0x41, "stbu");
+        const Cpu prologue = exec("stdu r1, -16(r1)", {{1, 0x80}}, memory);
+        check(memory.read32(0x70) == 0 && memory.read32(0x74) == 0x80 && prologue.gpr[1] == 0x70, "stdu : cree une pile de 64 bits");
+        memory.write32(0x28, 0x01020304);
+        memory.write32(0x2C, 0x05060708);
+        const Cpu load = exec("ldu r3, 8(r4)", {{4, 0x20}}, memory);
+        check_value(load.gpr[3], 0x0102030405060708ull, "ldu : valeur");
+        check_value(load.gpr[4], 0x28, "ldu : rA");
+        memory.write32(0x20, 0x80000000);
+        check_value(exec("lwa r3, 32(r0)", {}, memory).gpr[3], 0xFFFFFFFF80000000ull, "lwa : signe etendu");
+    }
+
+    // --- memoire : indexee (x) ---
+    {
+        Memory memory(256);
+        memory.write32(0x20, 0x11223344);
+        memory.write32(0x24, 0x55667788);
+        check_value(exec("lhzx r3, r4, r5", {{4, 0x10}, {5, 0x10}}, memory).gpr[3], 0x1122, "lhzx");
+        check_value(exec("lhax r3, r4, r5", {{4, 0x10}, {5, 0x12}}, memory).gpr[3], 0x3344, "lhax positif");
+        memory.write32(0x30, 0x80000000);
+        check_value(exec("lhax r3, r4, r5", {{4, 0x20}, {5, 0x10}}, memory).gpr[3], 0xFFFFFFFFFFFF8000ull, "lhax negatif");
+        check_value(exec("lwax r3, 0, r5", {{5, 0x30}}, memory).gpr[3], 0xFFFFFFFF80000000ull, "lwax : rA = 0 veut dire 0");
+        check_value(exec("ldx r3, r4, r5", {{4, 0x10}, {5, 0x10}}, memory).gpr[3], 0x1122334455667788ull, "ldx");
+        const Cpu update = exec("lwzux r3, r4, r5", {{4, 0x10}, {5, 0x10}}, memory);
+        check_value(update.gpr[3], 0x11223344, "lwzux : valeur");
+        check_value(update.gpr[4], 0x20, "lwzux : rA");
+        exec("stdx r3, r4, r5", {{3, 0xA1A2A3A4A5A6A7A8ull}, {4, 0x40}, {5, 0x08}}, memory);
+        check(memory.read32(0x48) == 0xA1A2A3A4 && memory.read32(0x4C) == 0xA5A6A7A8, "stdx");
+        exec("sthx r3, r4, r5", {{3, 0xBEEF}, {4, 0x50}, {5, 0x01}}, memory);
+        check(memory.read8(0x51) == 0xBE && memory.read8(0x52) == 0xEF, "sthx : adresse impaire permise");
+        const Cpu stux = exec("stwux r3, r4, r5", {{3, 0x01020304}, {4, 0x60}, {5, 0x04}}, memory);
+        check(memory.read32(0x64) == 0x01020304 && stux.gpr[4] == 0x64, "stwux");
+    }
+
+    // --- memoire : octets inverses (br) ---
+    {
+        Memory memory(256);
+        memory.write32(0x20, 0x11223344);
+        memory.write32(0x24, 0x55667788);
+        check_value(exec("lwbrx r3, 0, r5", {{5, 0x20}}, memory).gpr[3], 0x44332211, "lwbrx");
+        check_value(exec("lhbrx r3, 0, r5", {{5, 0x20}}, memory).gpr[3], 0x2211, "lhbrx");
+        check_value(exec("ldbrx r3, 0, r5", {{5, 0x20}}, memory).gpr[3], 0x8877665544332211ull, "ldbrx");
+        exec("stwbrx r3, 0, r5", {{3, 0x11223344}, {5, 0x30}}, memory);
+        check_value(memory.read32(0x30), 0x44332211, "stwbrx");
+        exec("sthbrx r3, 0, r5", {{3, 0x1122}, {5, 0x38}}, memory);
+        check(memory.read8(0x38) == 0x22 && memory.read8(0x39) == 0x11, "sthbrx");
+        exec("stdbrx r3, 0, r5", {{3, 0x1122334455667788ull}, {5, 0x40}}, memory);
+        check(memory.read32(0x40) == 0x88776655 && memory.read32(0x44) == 0x44332211, "stdbrx");
+    }
+
+    // --- acces qui sortent de la memoire : rien ne change ---
+    {
+        Memory memory(256);
+        Status status = Status::Running;
+        const Cpu load = exec("lhz r3, 255(r0)", {{3, 7}}, memory, &status);
+        check(status == Status::OutOfBounds && load.gpr[3] == 7, "lhz a cheval sur la fin : OutOfBounds");
+        memory.write8(255, 0x5A);
+        exec("sth r3, 255(r0)", {{3, 0x1234}}, memory, &status);
+        check(status == Status::OutOfBounds && memory.read8(255) == 0x5A, "sth a cheval : aucun octet ecrit");
+        exec("stdx r3, r4, r5", {{3, 1}, {4, 200}, {5, 52}}, memory, &status);   // 252 a 259
+        check(status == Status::OutOfBounds && memory.read8(252) == 0 && memory.read8(255) == 0x5A, "stdx a cheval : rien ecrit");
+        const Cpu update = exec("lwzu r3, 8(r4)", {{4, 0x1000}}, memory, &status);
+        check(status == Status::OutOfBounds && update.gpr[4] == 0x1000 && update.gpr[3] == 0, "lwzu hors memoire : rA inchange");
+    }
+
+    // --- chaque ligne de la table a une semantique : aucune ne doit sortir en InvalidInstruction ---
+    {
+        for (std::size_t n = 0; n < nerith::ppc::op_table_size(); n++) {
+            const OpInfo& op = nerith::ppc::op_table()[n];
+            std::uint32_t word = (op.opcode << 26) | (3u << 21) | (4u << 16);
+            switch (op.layout) {
+                case Layout::RtRaRb:
+                case Layout::RaRsRb:
+                case Layout::MemX:
+                    word |= 5u << 11;
+                    break;
+                case Layout::RtRaSimm:
+                case Layout::RaRsUimm:
+                case Layout::MemD:
+                    word |= 8u;
+                    break;
+                case Layout::MemDS:
+                    word |= 8u;
+                    break;
+                case Layout::RaRs:
+                case Layout::RtRa:
+                    break;
+            }
+            if (op.opcode == 31) {
+                word |= static_cast<std::uint32_t>(op.xo) << 1;
+            } else if (op.opcode == 58 || op.opcode == 62) {
+                word |= static_cast<std::uint32_t>(op.xo);
+            }
+            check(nerith::ppc::decode(word).kind == op.kind, std::string("table : decodage de ") + op.name);
+            Memory memory(256);
+            memory.write32(0, word);
+            Cpu cpu;
+            cpu.gpr[4] = 0x40;
+            cpu.gpr[5] = 0x08;
+            check(nerith::ppc::step(cpu, memory) == Status::Running, std::string("table : execution de ") + op.name);
+        }
+    }
+
+    // --- un vrai programme : CRC32 (zip, png...). Les valeurs attendues sont les valeurs connues du CRC32 ---
+    {
+        const std::string program =
+            "lis r6, 0xEDB8\n ori r6, r6, 0x8320\n clrldi r6, r6, 32\n"   // polynome 0xEDB88320 sur 32 bits
+            "li r3, -1\n clrldi r3, r3, 32\n mtctr r5\n"                  // crc = 0xFFFFFFFF, une tour par octet
+            "octet:\n lbz r7, 0(r4)\n addi r4, r4, 1\n xor r3, r3, r7\n li r8, 8\n"
+            "bit:\n andi. r9, r3, 1\n srwi r3, r3, 1\n beq suite\n xor r3, r3, r6\n"
+            "suite:\n addi r8, r8, -1\n cmpwi r8, 0\n bne bit\n bdnz octet\n"
+            "not r3, r3\n clrldi r3, r3, 32\n blr\n";
+        const std::pair<std::string, std::uint64_t> cases[] = {{"abc", 0x352441C2}, {"123456789", 0xCBF43926}};
+        for (const auto& [text, expected] : cases) {
+            Memory memory(1024);
+            const auto words = nerith::ppc::assemble(program);
+            for (std::size_t n = 0; n < words.size(); n++) {
+                memory.write32(n * 4, words[n]);
+            }
+            for (std::size_t n = 0; n < text.size(); n++) {
+                memory.write8(0x200 + n, static_cast<std::uint8_t>(text[n]));
+            }
+            Cpu cpu;
+            cpu.gpr[4] = 0x200;
+            cpu.gpr[5] = text.size();
+            check(nerith::ppc::run(cpu, memory, 100000) == Status::Halted, "crc32 : le programme se termine");
+            check_value(cpu.gpr[3], expected, "crc32(\"" + text + "\")");
+        }
+    }
+
+    if (failures == 0) {
+        std::cout << "Tous les tests des instructions de la table passent\n";
+        return 0;
+    }
+    std::cerr << failures << " test(s) en echec\n";
+    return 1;
+}

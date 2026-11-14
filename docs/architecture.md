@@ -70,10 +70,12 @@ src/<module>/              code du module
 | `util` | Lecture de fichiers (`file.h`), logs (`log.h`) | rien |
 | `memory` | Classe `Memory` : octets, big-endian, accès vérifiés | rien |
 | `toy` | CPU pédagogique (`cpu.h`), assembleur, désassembleur | `memory` |
-| `ppc` | CPU PowerPC : décodeur, désassembleur, assembleur, interpréteur (`nerith::ppc`) | `memory` |
+| `ppc` | CPU PowerPC : décodeur, désassembleur, assembleur, interpréteur, table d'instructions (`nerith::ppc`) | `memory` |
 | `xex` | Lecture de l'en-tête d'un fichier XEX (exécutable Xbox 360), sans déchiffrement (`nerith::xex`) | rien |
 
 L'exécutable `nerith` (`src/main.cpp`) utilise `toy`, `ppc`, `xex` et `util` (option `--ppc` pour le PowerPC, option `--xex` pour lire un en-tête XEX). Chaque test n'est lié qu'au module qu'il vérifie.
+
+Dans `ppc`, la plupart des instructions sont décrites une seule fois dans une table (`optable.h` et `optable.cpp` : code opération, nom, place des champs). Le décodeur, l'assembleur et l'affichage la lisent tous les trois ; ce que fait chaque instruction reste écrit dans `cpu.cpp`. Décision D-015 dans `docs/decisions.md`.
 
 Règles :
 - Un module ne dépend que des modules plus bas dans le tableau. Pas de dépendance circulaire.
@@ -81,7 +83,7 @@ Règles :
 - `Memory` est partagée : `toy` et `ppc` l'utilisent, sans dépendre l'un de l'autre.
 - Le namespace reste `nerith` pour tous les modules. `ppc` est dans `nerith::ppc`, car ses noms (`Cpu`, `step`, `run`...) sont les mêmes que ceux de `toy` ; `toy` pourra passer dans `nerith::toy` plus tard.
 
-Décisions : D-012, D-013 et D-014 dans [Décisions techniques](decisions.md).
+Décisions : D-012, D-013, D-014 et D-015 dans [Décisions techniques](decisions.md).
 
 ## Arborescence cible du dépôt
 

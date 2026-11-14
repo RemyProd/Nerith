@@ -22,6 +22,7 @@ Conserver les décisions importantes et leur justification. Ne pas effacer une a
 | D-012 | Organisation du code | Retenue | Modules `util`, `memory`, `toy` : un sous-dossier et une bibliothèque CMake chacun |
 | D-013 | Module PowerPC | Retenue | Module `ppc` (décodeur, désassembleur, assembleur, interpréteur) dans `nerith::ppc`, qui dépend de `memory` |
 | D-014 | Lecture des fichiers XEX | Retenue | Module `xex` (`nerith::xex`, sans dépendance) : en-tête seulement, aucun déchiffrement ni décompression |
+| D-015 | Table d'instructions et vérification avec llvm | Retenue | Les nouvelles instructions sont décrites une fois dans `optable` ; chaque mot et chaque texte sont comparés à llvm-mc |
 
 ## Décisions détaillées
 
@@ -104,6 +105,17 @@ Conserver les décisions importantes et leur justification. Ne pas effacer une a
 - **Justification :** l'en-tête est la seule partie testable sans fichier de jeu ni clé ; elle suffit à répondre à plusieurs points « à vérifier » de la note de lecture (en-tête lisible sans clé ? tailles des en-têtes optionnels ?).
 - **Points à vérifier :** valeur directe pour les identifiants dont l'octet de poids faible vaut 0x00 (hypothèse retenue pour le point d'entrée) ; sens exact du champ à 0x10 (« informations de sécurité »).
 - **Conséquences :** `value_kind` et les noms des identifiants viennent de Free60 (source auto-qualifiée de spéculative) ; à recouper avant de s'y fier pour charger un programme.
+
+### D-015 — Table d'instructions et vérification croisée avec llvm
+- **Date :** 2026-11-14
+- **État :** retenue, révisable
+- **Contexte :** une centaine d'instructions entières à gérer. Écrire à la main, pour chacune, un cas dans le décodeur, un dans l'assembleur et un dans l'affichage répète beaucoup de code, et chaque répétition est une occasion de faute.
+- **Options étudiées :** (A) continuer à la main ; (B) une table unique (code opération, nom, place des champs) lue par le décodeur, l'assembleur et l'affichage, la sémantique restant dans `cpu.cpp` ; (C) générer le code à partir d'un fichier de description avec un outil séparé.
+- **Décision :** option B pour toutes les nouvelles instructions (`src/ppc/optable.cpp`) ; les anciennes restent écrites à la main et pourront migrer plus tard. Les rotations, les comparaisons sans signe et quelques formes spéciales restent à la main dans le décodeur.
+- **Vérification :** chaque ligne de test est un cas assemblé par llvm-mc (mot de 32 bits) et désassemblé par llvm-mc (texte). llvm-mc sert d'outil de référence hors dépôt ; il n'est pas une dépendance du projet. Le comportement (ce que fait l'instruction) n'est pas vérifiable ainsi : les tests sont calculés à la main, et un programme complet (CRC32) est comparé aux valeurs connues.
+- **Choix de comportement :** les formes avec point (`Rc = 1`) et avec débordement (`OE = 1`) restent refusées. Division par zéro et `INT_MIN / -1` : le manuel dit « indéfini », Nerith met 0. Résultats de 32 bits signés (`mulhw`, `divw`) : signe étendu sur 64 bits ; non signés (`mulhwu`, `divwu`) : complétés par des 0. Le décodeur tolère un bit réservé non nul dans `cmpwi` et `cmplw`, comme le matériel.
+- **Pas encore gérées :** tout ce qui touche le registre XER (retenue et dépassement) : `sraw`, `srawi`, `srad`, `sradi`, `addic`, `addc`, `adde`, `subfc`... Elles demandent d'abord d'ajouter XER à l'état du processeur.
+- **Points à vérifier :** le résultat réel de la console pour une division par zéro (peu probable dans du code sain).
 
 ## Format d'une décision
 

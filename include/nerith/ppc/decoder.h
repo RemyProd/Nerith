@@ -39,6 +39,20 @@ enum class Kind {
     Ld,        // ld rD, ds(rA)       (lire un mot de 64 bits ; ds est un multiple de 4)
     Std,       // std rS, ds(rA)      (ecrire un mot de 64 bits)
     Stbx,      // stbx rS, rA, rB     (comme stb, adresse rA + rB)
+    // --- Instructions decrites dans la table (optable.h) ---
+    // Entier : multiplication, division, logique, decalages, extensions
+    Mulli, Mulhw, Mulhwu, Mulld, Divw, Divwu, Divd, Divdu, Neg,
+    And, Andc, Xor, Nor, Nand, Orc, Eqv,
+    Slw, Srw, Sld, Srd, Cntlzw, Cntlzd, Extsb, Extsh, Extsw,
+    Oris, Xori, Xoris, AndiDot, AndisDot,
+    // Memoire : demi-mots (16 bits), instructions "avec mise a jour" (u), indexees (x), inversees (br)
+    Lwzu, Lbzu, Stbu, Lhz, Lhzu, Lha, Lhau, Sth, Sthu,
+    Lwa, Ldu, Stdu,
+    Lhzx, Lhax, Sthx, Lwzux, Lbzux, Lhzux, Lhaux, Stwux, Stbux, Sthux, Lwax, Lwaux,
+    Ldx, Stdx, Ldux, Stdux, Lwbrx, Stwbrx, Lhbrx, Sthbrx, Ldbrx, Stdbrx,
+    // Comparaisons sans signe et rotations (ecrites a la main dans le decodeur)
+    Cmplwi, Cmpldi, Cmplw, Cmpld,
+    Rlwimi, Rlwnm, Rldicl, Rldicr, Rldic, Rldimi,
 };
 
 // Le resultat du decodage d'un mot de 32 bits.
@@ -52,7 +66,7 @@ struct Instruction {
     std::int32_t imm = 0;     // valeur immediate (avec signe) ou deplacement du saut, en octets
     bool absolute = false;    // B : bit AA (adresse absolue au lieu de relative)
     bool link = false;        // B, Blr, Bctr : bit LK (sauvegarde l'adresse de retour dans LR)
-    std::uint8_t sh = 0;      // Rlwinm : rotation a gauche (0 a 31)
+    std::uint8_t sh = 0;      // Rlwinm : rotation a gauche (0 a 31) ; Rldicl... : 0 a 63
     std::uint8_t mb = 0;      // Rlwinm : debut du masque (bit 0 = poids fort des 32 bits)
     std::uint8_t me = 0;      // Rlwinm : fin du masque
     std::uint8_t crf = 0;     // Cmpwi : numero du champ de CR (0 a 7)

@@ -3,6 +3,8 @@
 #include <iomanip>
 #include <sstream>
 
+#include "nerith/ppc/optable.h"
+
 namespace nerith::ppc {
 
 namespace {
@@ -27,6 +29,42 @@ std::string signed_offset(std::int32_t value) {
     return (value < 0 ? "-" : "+") + std::to_string(value < 0 ? -value : value);
 }
 
+// Texte d'une instruction decrite dans la table.
+std::string table_text(const OpInfo& op, const Instruction& i) {
+    const std::string name = op.name;
+    const std::string rd = reg_name(i.rd);
+    const std::string ra = reg_name(i.ra);
+    const std::string rb = reg_name(i.rb);
+    switch (op.layout) {
+        case Layout::RtRaRb:
+            return name + " " + rd + ", " + ra + ", " + rb;
+        case Layout::RaRsRb:   // rd est rS, ra est la destination
+            if (i.kind == Kind::Nor && i.rd == i.rb) {
+                return "not " + ra + ", " + rd;
+            }
+            return name + " " + ra + ", " + rd + ", " + rb;
+        case Layout::RaRs:
+            return name + " " + ra + ", " + rd;
+        case Layout::RtRa:
+            return name + " " + rd + ", " + ra;
+        case Layout::RtRaSimm:
+            return name + " " + rd + ", " + ra + ", " + std::to_string(i.imm);
+        case Layout::RaRsUimm:
+            return name + " " + ra + ", " + rd + ", " + std::to_string(i.imm);
+        case Layout::MemD:
+        case Layout::MemDS:
+            return name + " " + rd + ", " + std::to_string(i.imm) + "(" + ra + ")";
+        case Layout::MemX:   // rA = 0 veut dire le nombre 0 : on l'ecrit "0", comme llvm
+            return name + " " + rd + ", " + (i.ra == 0 ? std::string("0") : ra) + ", " + rb;
+    }
+    return name;
+}
+
+// "cmplwi cr1, r3, 5" : le champ de CR n'est ecrit que s'il n'est pas cr0.
+std::string compare_text(const std::string& name, std::uint8_t crf, const std::string& a, const std::string& b) {
+    return name + " " + (crf == 0 ? std::string() : "cr" + std::to_string(static_cast<int>(crf)) + ", ") + a + ", " + b;
+}
+
 }  // namespace
 
 Instruction decode(std::uint32_t word) {
@@ -39,6 +77,47 @@ Instruction decode(std::uint32_t word) {
             result.crf = static_cast<std::uint8_t>((word >> 23) & 0x7);
             result.ra = field_11_15(word);
             result.imm = simm16(word);
+            break;
+
+        case 10:   // cmplwi (L = 0, 32 bits) ou cmpldi (L = 1, 64 bits) : comparaison SANS signe
+            result.kind = ((word >> 21) & 0x1) == 0 ? Kind::Cmplwi : Kind::Cmpldi;
+            result.crf = static_cast<std::uint8_t>((word >> 23) & 0x7);
+            result.ra = field_11_15(word);
+            result.imm = static_cast<std::int32_t>(word & 0xFFFF);   // nombre sans signe
+            break;
+
+        case 20:   // rlwimi (Rc = 0) : insere des bits tournes dans rA ; rd est rS
+        case 23:   // rlwnm (Rc = 0) : comme rlwinm, mais la rotation vient de rB
+            if ((word & 0x1) == 0) {
+                result.kind = opcode_of(word) == 20 ? Kind::Rlwimi : Kind::Rlwnm;
+                result.rd = field_6_10(word);
+                result.ra = field_11_15(word);
+                if (result.kind == Kind::Rlwimi) {
+                    result.sh = field_16_20(word);
+                } else {
+                    result.rb = field_16_20(word);
+                }
+                result.mb = static_cast<std::uint8_t>((word >> 6) & 0x1F);
+                result.me = static_cast<std::uint8_t>((word >> 1) & 0x1F);
+            }
+            break;
+
+        case 30:   // rotations 64 bits (forme MD) : rldicl, rldicr, rldic, rldimi ; Rc = 0
+            if ((word & 0x1) == 0 && ((word >> 2) & 0x7) < 4) {
+                static const Kind kKinds[] = {Kind::Rldicl, Kind::Rldicr, Kind::Rldic, Kind::Rldimi};
+                result.kind = kKinds[(word >> 2) & 0x7];
+                result.rd = field_6_10(word);
+                result.ra = field_11_15(word);
+                // sh : 6 bits, le bit de poids fort est tout a droite (bit 30) ; mb/me : 6 bits "retournes"
+                result.sh = static_cast<std::uint8_t>((((word >> 1) & 0x1) << 5) | field_16_20(word));
+                const unsigned raw = (word >> 5) & 0x3F;
+                const std::uint8_t mask_bit = static_cast<std::uint8_t>(((raw & 1u) << 5) | (raw >> 1));
+                if (result.kind == Kind::Rldicr) {
+                    result.me = mask_bit;
+                } else {
+                    result.mb = mask_bit;
+                }
+            }
             break;
 
         case 58:   // ld : seulement la forme de base (les 2 bits de poids faible valent 0 ; 1 = ldu, 2 = lwa)
@@ -188,6 +267,11 @@ Instruction decode(std::uint32_t word) {
                             result.rb = 0;
                         }
                         break;
+                    case 32:  // cmplw (L = 0) ou cmpld (L = 1) : comparaison sans signe
+                        result.kind = ((word >> 21) & 0x1) == 0 ? Kind::Cmplw : Kind::Cmpld;
+                        result.crf = static_cast<std::uint8_t>((word >> 23) & 0x7);
+                        result.rd = 0;
+                        break;
                     case 0:   // cmpw (L = 0, 32 bits) ou cmpd (L = 1, 64 bits)
                         result.kind = ((word >> 21) & 0x1) == 0 ? Kind::Cmpw : Kind::Cmpd;
                         result.crf = static_cast<std::uint8_t>((word >> 23) & 0x7);
@@ -205,11 +289,90 @@ Instruction decode(std::uint32_t word) {
         default:
             break;
     }
+
+    // Les instructions de la table (optable.cpp) : on lit les champs selon leur disposition.
+    if (result.kind == Kind::Unknown) {
+        if (const OpInfo* op = find_op_for_word(word)) {
+            const bool needs_zero_rb = op->layout == Layout::RaRs || op->layout == Layout::RtRa;
+            if (!(needs_zero_rb && field_16_20(word) != 0)) {
+                result = Instruction{};
+                result.word = word;
+                result.kind = op->kind;
+                result.rd = field_6_10(word);
+                result.ra = field_11_15(word);
+                switch (op->layout) {
+                    case Layout::RtRaRb:
+                    case Layout::RaRsRb:
+                    case Layout::MemX:
+                        result.rb = field_16_20(word);
+                        break;
+                    case Layout::RtRaSimm:
+                    case Layout::MemD:
+                        result.imm = simm16(word);
+                        break;
+                    case Layout::MemDS:   // les 2 bits de poids faible sont un code, pas un deplacement
+                        result.imm = simm16(word & 0xFFFCu);
+                        break;
+                    case Layout::RaRsUimm:
+                        result.imm = static_cast<std::int32_t>(word & 0xFFFF);
+                        break;
+                    case Layout::RaRs:
+                    case Layout::RtRa:
+                        break;
+                }
+            }
+        }
+    }
     return result;
 }
 
 std::string to_text(const Instruction& i) {
+    if (const OpInfo* op = find_op(i.kind)) {
+        return table_text(*op, i);
+    }
     switch (i.kind) {
+        case Kind::Cmplwi:
+            return compare_text("cmplwi", i.crf, reg_name(i.ra), std::to_string(i.imm));
+        case Kind::Cmpldi:
+            return compare_text("cmpldi", i.crf, reg_name(i.ra), std::to_string(i.imm));
+        case Kind::Cmplw:
+            return compare_text("cmplw", i.crf, reg_name(i.ra), reg_name(i.rb));
+        case Kind::Cmpld:
+            return compare_text("cmpld", i.crf, reg_name(i.ra), reg_name(i.rb));
+
+        case Kind::Rlwimi:
+            return "rlwimi " + reg_name(i.ra) + ", " + reg_name(i.rd) + ", " + std::to_string(i.sh) + ", " +
+                   std::to_string(i.mb) + ", " + std::to_string(i.me);
+        case Kind::Rlwnm:
+            if (i.mb == 0 && i.me == 31) {
+                return "rotlw " + reg_name(i.ra) + ", " + reg_name(i.rd) + ", " + reg_name(i.rb);
+            }
+            return "rlwnm " + reg_name(i.ra) + ", " + reg_name(i.rd) + ", " + reg_name(i.rb) + ", " +
+                   std::to_string(i.mb) + ", " + std::to_string(i.me);
+
+        // rotations 64 bits : formes courantes dans le meme ordre de priorite que llvm
+        case Kind::Rldicl: {
+            const std::string a = reg_name(i.ra) + ", " + reg_name(i.rd) + ", ";
+            if (i.mb == 0) {
+                return "rotldi " + a + std::to_string(i.sh);
+            }
+            if (i.sh == 0) {
+                return "clrldi " + a + std::to_string(i.mb);
+            }
+            return "rldicl " + a + std::to_string(i.sh) + ", " + std::to_string(i.mb);
+        }
+        case Kind::Rldicr: {
+            const std::string a = reg_name(i.ra) + ", " + reg_name(i.rd) + ", ";
+            if (i.sh + i.me == 63) {
+                return "sldi " + a + std::to_string(i.sh);
+            }
+            return "rldicr " + a + std::to_string(i.sh) + ", " + std::to_string(i.me);
+        }
+        case Kind::Rldic:
+        case Kind::Rldimi:
+            return std::string(i.kind == Kind::Rldic ? "rldic " : "rldimi ") + reg_name(i.ra) + ", " +
+                   reg_name(i.rd) + ", " + std::to_string(i.sh) + ", " + std::to_string(i.mb);
+
         case Kind::Addi:
             if (i.ra == 0) {
                 return "li " + reg_name(i.rd) + ", " + std::to_string(i.imm);
@@ -359,7 +522,7 @@ std::string to_text(const Instruction& i) {
         case Kind::Bctr:
             return i.link ? "bctrl" : "bctr";
 
-        case Kind::Unknown:
+        default:   // Unknown, ou une instruction de la table deja traitee plus haut
             break;
     }
 

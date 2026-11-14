@@ -7,6 +7,7 @@
 #include "nerith/ppc/assembler.h"
 #include "nerith/ppc/cpu.h"
 #include "nerith/ppc/decoder.h"
+#include "ppc_table_cases.h"
 
 namespace {
 
@@ -37,6 +38,28 @@ bool fails_at(const std::string& source, std::size_t line) {
 }  // namespace
 
 int main() {
+    // Les instructions de la table : chaque ligne doit donner le mot verifie avec llvm-mc
+    for (const nerith_test::TableCase& c : nerith_test::kTableCases) {
+        std::uint32_t word = 0;
+        try {
+            word = one(c.source);
+        } catch (const nerith::ppc::AssemblyError& e) {
+            std::cerr << "ECHEC : " << c.source << " refuse : " << e.what() << "\n";
+            ++failures;
+            continue;
+        }
+        if (word != c.word) {
+            std::cerr << "ECHEC : " << c.source << " donne " << std::hex << word << " au lieu de " << c.word
+                      << std::dec << "\n";
+            ++failures;
+        }
+    }
+    check(fails_at("rldicl r3, r4, 64, 0\n", 1), "rldicl : decalage hors limites");
+    check(fails_at("sldi r3, r4, 64\n", 1), "sldi : decalage hors limites");
+    check(fails_at("andi r3, r4, 5\n", 1), "andi sans le point n'existe pas");
+    check(fails_at("andi. r3, r4, -1\n", 1), "andi. : nombre negatif refuse");
+    check(fails_at("ldu r3, 6(r1)\n", 1), "ldu : deplacement non multiple de 4");
+    check(fails_at("lwzx r3, r4\n", 1), "lwzx : operande manquant");
     using namespace nerith;
 
     // les mots connus des autres tests

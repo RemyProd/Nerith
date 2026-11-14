@@ -46,6 +46,7 @@ add_library(nerith_ppc
     src/ppc/cpu.cpp
     src/ppc/decoder.cpp
     src/ppc/disassembler.cpp
+    src/ppc/optable.cpp
 )
 nerith_module(nerith_ppc)
 target_link_libraries(nerith_ppc PUBLIC nerith_memory)
@@ -79,4 +80,5 @@ nerith_test(ppc_decoder  nerith_ppc)
 nerith_test(ppc_disassembler nerith_ppc)
 nerith_test(ppc_cpu          nerith_ppc)
 nerith_test(ppc_assembler    nerith_ppc)
+nerith_test(ppc_cpu_table    nerith_ppc)
 nerith_test(xex_header       nerith_xex)

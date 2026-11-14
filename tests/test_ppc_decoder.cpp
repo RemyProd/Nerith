@@ -3,6 +3,7 @@
 #include <string>
 
 #include "nerith/ppc/decoder.h"
+#include "ppc_table_cases.h"
 
 namespace {
 
@@ -22,6 +23,26 @@ std::string text(std::uint32_t word) {
 }  // namespace
 
 int main() {
+    // Les instructions de la table : chaque mot est decode, puis reecrit en texte (cas verifies avec llvm-mc)
+    for (const nerith_test::TableCase& c : nerith_test::kTableCases) {
+        if (text(c.word) != c.text) {
+            std::cerr << "ECHEC : decodage de " << c.source << " : \"" << text(c.word) << "\" au lieu de \"" << c.text << "\"\n";
+            ++failures;
+        }
+    }
+    {   // formes pas gerees : Rc = 1, OE = 1, ou champ reserve non nul
+        using nerith::ppc::decode;
+        using nerith::ppc::Kind;
+        check(decode(0x7C832839).kind == Kind::Unknown, "and. (Rc = 1) pas gere");
+        check(decode(0x7C6429D3).kind == Kind::Unknown, "mulld. (Rc = 1) pas gere");
+        check(decode(0x7C642DD6).kind == Kind::Unknown, "divw avec OE = 1 : pas gere");
+        check(decode(0x7C6400D0).kind == Kind::Neg, "neg r3, r4");
+        check(decode(0x7C6428D0).kind == Kind::Unknown, "neg avec rB non nul : reserve");
+        check(decode(0x7C830035).kind == Kind::Unknown, "cntlzw. (Rc = 1) pas gere");
+        check(decode(0x7C8307B5).kind == Kind::Unknown, "extsw. (Rc = 1) pas gere");
+        check(decode(0x788329C1).kind == Kind::Unknown, "rldicl. (Rc = 1) pas gere");
+        check(decode(0x508329D9).kind == Kind::Unknown, "rlwimi. (Rc = 1) pas gere");
+    }
     using namespace nerith::ppc;
 
     {   // les trois mots de l'exercice de la note "PowerPC et Xenon"
@@ -84,9 +105,10 @@ int main() {
     check(text(0xE8610008) == "ld r3, 8(r1)", "ld");
     check(text(0xE861FFF8) == "ld r3, -8(r1)", "ld negatif");
     check(text(0xF8610008) == "std r3, 8(r1)", "std");
-    check(decode(0xE8610009).kind == Kind::Unknown, "ldu (bits 01) pas encore gere");
-    check(decode(0xE8610002).kind == Kind::Unknown, "lwa (bits 10) pas encore gere");
-    check(decode(0xF8610001).kind == Kind::Unknown, "stdu (bits 01) pas encore gere");
+    check(text(0xE8610009) == "ldu r3, 8(r1)", "ldu");
+    check(text(0xE861000A) == "lwa r3, 8(r1)", "lwa");
+    check(text(0xF8610001) == "stdu r3, 0(r1)", "stdu");
+    check(decode(0xE8610003).kind == Kind::Unknown, "ld avec les bits 11 : reserve");
 
     // pile et lr (mots verifies avec llvm-mc)
     check(text(0x7C0802A6) == "mflr r0", "mflr");
