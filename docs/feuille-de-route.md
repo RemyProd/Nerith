@@ -23,7 +23,7 @@ Détail du parcours : [Apprentissage C++](apprentissage-cpp.md).
 - [x] Structures et classes.
 - [ ] Durée de vie et gestion mémoire.
 - [ ] Fichiers et flux.
-- [ ] Débogueur Visual Studio.
+- [x] Débogueur Visual Studio.
 - [x] Compilation et warnings.
 
 **Livrable :** petits programmes compris et maîtrisés.

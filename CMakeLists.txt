@@ -11,6 +11,7 @@ add_library(nerith_core
     src/cpu.cpp
     src/memory.cpp
     src/disassembler.cpp
+    src/file.cpp
 )
 target_include_directories(nerith_core PUBLIC include)
 if(MSVC)
@@ -36,6 +37,10 @@ add_test(NAME memory COMMAND test_memory)
 add_executable(test_assembler tests/test_assembler.cpp)
 target_link_libraries(test_assembler PRIVATE nerith_core)
 add_test(NAME assembler COMMAND test_assembler)
+
+add_executable(test_file tests/test_file.cpp)
+target_link_libraries(test_file PRIVATE nerith_core)
+add_test(NAME file COMMAND test_file)
 
 add_executable(test_disassembler tests/test_disassembler.cpp)
 target_link_libraries(test_disassembler PRIVATE nerith_core)
