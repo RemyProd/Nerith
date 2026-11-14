@@ -42,7 +42,7 @@ Spécification : [Premier exercice](premier-exercice-cpu.md).
 
 ## Phase 3 — Architecture du projet réel
 Voir [Architecture](architecture.md).
-- [ ] Interfaces entre modules.
+- [x] Interfaces entre modules. (modules `util`, `memory`, `toy` ; dépendances dans CMake, D-012)
 - [x] CMake. (bibliothèque `nerith_core`, exécutable, tests)
 - [x] Tests. (CTest, `check()`, un fichier par sujet)
 - [x] Logs et diagnostics. (`nerith/log.h`, `--verbose`, `--trace`)

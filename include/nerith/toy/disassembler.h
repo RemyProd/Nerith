@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <string>
 
-#include "nerith/memory.h"
+#include "nerith/memory/memory.h"
 
 namespace nerith {
 

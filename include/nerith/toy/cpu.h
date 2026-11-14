@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <vector>
 
-#include "nerith/memory.h"
+#include "nerith/memory/memory.h"
 
 namespace nerith {
 

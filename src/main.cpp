@@ -7,12 +7,12 @@
 #include <string>
 #include <vector>
 
-#include "nerith/assembler.h"
-#include "nerith/cpu.h"
-#include "nerith/disassembler.h"
-#include "nerith/file.h"
-#include "nerith/log.h"
-#include "nerith/memory.h"
+#include "nerith/memory/memory.h"
+#include "nerith/toy/assembler.h"
+#include "nerith/toy/cpu.h"
+#include "nerith/toy/disassembler.h"
+#include "nerith/util/file.h"
+#include "nerith/util/log.h"
 
 namespace {
 

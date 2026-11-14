@@ -1,10 +1,10 @@
-#include "nerith/assembler.h"
+#include "nerith/toy/assembler.h"
 
 #include <cctype>
 #include <map>
 #include <sstream>
 
-#include "nerith/cpu.h"
+#include "nerith/toy/cpu.h"
 
 namespace nerith {
 

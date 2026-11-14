@@ -13,12 +13,13 @@ Conserver les décisions importantes et leur justification. Ne pas effacer une a
 | D-003 | Build | Retenue | CMake |
 | D-004 | Dépôt | Retenue | GitHub public |
 | D-005 | Nom | Provisoire | Nerith (remplace Project Xenon) |
-| D-006 | Architecture | À définir | Modules indépendants |
+| D-006 | Architecture | En cours | Modules indépendants ; premier découpage en D-012 |
 | D-007 | Kernel cible | À étudier | Architecture multi-version ; le dernier kernel ne garantit pas tous les jeux |
 | D-008 | API graphique | À étudier | Décider après recherche et prototype |
 | D-009 | Licence | Provisoire | BSD-3-Clause (copyright : RemyProd) |
 | D-010 | Conventions de code | Retenue | Conventions écrites (`docs/conventions.md`) et `.editorconfig`, sans formateur automatique |
-| D-011 | Logs | Retenue | Petit module maison (`nerith/log.h`), sans dépendance |
+| D-011 | Logs | Retenue | Petit module maison (`nerith/util/log.h`), sans dépendance |
+| D-012 | Organisation du code | Retenue | Modules `util`, `memory`, `toy` : un sous-dossier et une bibliothèque CMake chacun |
 
 ## Décisions détaillées
 
@@ -65,10 +66,19 @@ Conserver les décisions importantes et leur justification. Ne pas effacer une a
 - **État :** retenue, révisable
 - **Contexte :** besoin de messages de diagnostic (erreurs, étapes, détails) distincts de la sortie normale du programme.
 - **Options étudiées :** (1) petit module maison ; (2) bibliothèque externe (par exemple spdlog) ; (3) `std::cerr` partout.
-- **Décision :** option 1 : `nerith/log.h`, quatre niveaux (`Debug`, `Info`, `Warning`, `Error`) plus `Off`, flux configurable (utile pour les tests), niveau par défaut `Warning`, option `--verbose` pour passer à `Debug`.
+- **Décision :** option 1 : `nerith/util/log.h`, quatre niveaux (`Debug`, `Info`, `Warning`, `Error`) plus `Off`, flux configurable (utile pour les tests), niveau par défaut `Warning`, option `--verbose` pour passer à `Debug`.
 - **Justification :** aucune dépendance, une centaine de lignes, testable, suffisant pour un seul thread.
 - **Limites :** **pas sûr pour plusieurs threads** (variables globales sans protection). À revoir quand l'émulation multi-thread (6 threads matériels sur Xenon) arrivera, soit en protégeant le module, soit en passant à une bibliothèque. Pas de log dans la boucle chaude du CPU.
 - **Conséquences :** `main` utilise `log_info`/`log_error` ; les résultats du programme restent sur la sortie standard.
+
+### D-012 — Organisation du code en modules
+- **Date :** 2026-11-14
+- **État :** retenue, révisable
+- **Contexte :** le code existant (mémoire, CPU pédagogique, assembleur, fichiers, logs) était à plat dans `include/nerith/` et `src/`. Un futur CPU PowerPC va s'y ajouter et doit pouvoir réutiliser `Memory` sans mélanger ses fichiers avec ceux du CPU pédagogique.
+- **Options étudiées :** (A) ne rien déplacer ; (B) un sous-dossier et une bibliothèque CMake par module ; (C) comme B, avec en plus un namespace par module.
+- **Décision :** option B. Modules `util` (fichiers, logs), `memory` (`Memory`), `toy` (CPU pédagogique, assembleur, désassembleur). Dépendances : `toy` → `memory` ; `util` et `memory` ne dépendent de rien. Le namespace reste `nerith`.
+- **Justification :** les dépendances sont déclarées dans CMake et vérifiées à la compilation ; `Memory` est clairement partagée ; le déplacement est mécanique et les 6 séries de tests vérifient qu'il n'a rien cassé.
+- **Conséquences :** en-têtes inclus avec leur module (`nerith/memory/memory.h`) ; un test n'est lié qu'au module qu'il vérifie ; le futur module `ppc` s'ajoutera à côté de `toy`. L'option C sera reconsidérée quand deux modules auront des noms identiques.
 
 ## Format d'une décision
 

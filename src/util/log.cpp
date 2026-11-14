@@ -1,4 +1,4 @@
-#include "nerith/log.h"
+#include "nerith/util/log.h"
 
 #include <iostream>
 

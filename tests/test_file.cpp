@@ -4,7 +4,7 @@
 #include <stdexcept>
 #include <string>
 
-#include "nerith/file.h"
+#include "nerith/util/file.h"
 
 namespace {
 

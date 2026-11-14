@@ -8,13 +8,16 @@ Ces règles décrivent ce que le code de Nerith fait déjà. Elles servent à re
 
 | Dossier | Contenu |
 |---|---|
-| `include/nerith/` | En-têtes publics (`.h`) : ce que les autres parties du projet ont le droit d'utiliser |
-| `src/` | Code (`.cpp`) et programme principal (`main.cpp`) |
+| `include/nerith/<module>/` | En-têtes publics (`.h`) d'un module : ce que les autres parties du projet ont le droit d'utiliser |
+| `src/<module>/` | Code (`.cpp`) du module |
+| `src/main.cpp` | Programme principal |
 | `tests/` | Un fichier `test_<sujet>.cpp` par sujet |
 | `examples/` | Programmes d'exemple (`.asm`) |
 | `docs/` | Documentation |
 
-- Un sujet = un en-tête + un fichier source du même nom (`memory.h` et `memory.cpp`).
+- Un sujet = un en-tête + un fichier source du même nom, dans le même module (`memory/memory.h` et `memory/memory.cpp`).
+- Les modules actuels sont `util`, `memory` et `toy` ; leurs dépendances sont décrites dans [Architecture](architecture.md). Un module ne dépend que de modules plus bas, jamais l'inverse.
+- On inclut avec le nom du module : `#include "nerith/memory/memory.h"`.
 - Tout le code du projet est dans le namespace `nerith`. Les petites fonctions qui ne servent qu'à un fichier vont dans un namespace anonyme `namespace { ... }` en haut du `.cpp`.
 
 ## Noms
@@ -33,7 +36,7 @@ Les noms sont en anglais dans le code, les commentaires en français.
 ## En-têtes
 
 - `#pragma once` en première ligne de chaque `.h`.
-- Dans un `.cpp` : d'abord son propre en-tête, puis la bibliothèque standard, puis les autres en-têtes du projet.
+- Dans un `.cpp` : d'abord son propre en-tête, puis la bibliothèque standard, puis les autres en-têtes du projet (par ordre alphabétique).
 - Un en-tête n'inclut que ce dont il a besoin lui-même.
 - Chaque fonction publique a un commentaire dans l'en-tête qui dit ce qu'elle fait, ce qu'elle renvoie et quelles erreurs elle peut signaler.
 
@@ -60,7 +63,7 @@ Les noms sont en anglais dans le code, les commentaires en français.
 
 - Chaque nouveau comportement a un test dans `tests/`. Pour une nouvelle instruction, écrire le test d'abord.
 - Un test = un bloc `{ ... }` avec un nom lisible de la forme « sujet : résultat attendu ».
-- Les tests sont enregistrés dans CMake (`add_test`) et se lancent avec `ctest`.
+- Les tests sont enregistrés dans CMake avec `nerith_test(nom bibliothèque)` et se lancent avec `ctest`. Chaque test n'est lié qu'au module qu'il vérifie.
 
 ## Compilation
 

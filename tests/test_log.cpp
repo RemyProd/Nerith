@@ -2,7 +2,7 @@
 #include <sstream>
 #include <string>
 
-#include "nerith/log.h"
+#include "nerith/util/log.h"
 
 namespace {
 

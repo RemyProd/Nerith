@@ -56,6 +56,31 @@ Expérience utilisateur. Ce module ne doit pas contenir le cœur de l'émulation
 - Le multithreading doit être introduit prudemment et mesuré.
 - Le JIT exige une gestion rigoureuse de la mémoire exécutable et de la sécurité.
 
+## Organisation actuelle du code
+
+Le code existant est rangé en trois modules. Chaque module est une bibliothèque CMake distincte, ce qui force à déclarer les dépendances.
+
+```text
+include/nerith/<module>/   en-têtes du module
+src/<module>/              code du module
+```
+
+| Module | Contenu | Dépend de |
+|---|---|---|
+| `util` | Lecture de fichiers (`file.h`), logs (`log.h`) | rien |
+| `memory` | Classe `Memory` : octets, big-endian, accès vérifiés | rien |
+| `toy` | CPU pédagogique (`cpu.h`), assembleur, désassembleur | `memory` |
+
+L'exécutable `nerith` (`src/main.cpp`) utilise `toy` et `util`. Chaque test n'est lié qu'au module qu'il vérifie.
+
+Règles :
+- Un module ne dépend que des modules plus bas dans le tableau. Pas de dépendance circulaire.
+- On inclut un en-tête avec son module : `#include "nerith/memory/memory.h"`.
+- `Memory` est partagée : le futur module `ppc` (processeur PowerPC) l'utilisera aussi, sans passer par `toy`.
+- Le namespace reste `nerith` pour tous les modules. On passera à un namespace par module (`nerith::toy`, `nerith::ppc`) quand deux modules auront des noms identiques (par exemple deux fonctions `step`).
+
+Décision : D-012 dans [Décisions techniques](decisions.md).
+
 ## Arborescence cible du dépôt
 
 ```text
@@ -65,7 +90,7 @@ Nerith/
 ├── docs/
 ├── include/
 │   └── nerith/
-│       ├── cpu/
+│       ├── cpu/        (futur CPU PowerPC ; le CPU pédagogique est dans toy/)
 │       ├── memory/
 │       ├── gpu/
 │       ├── audio/

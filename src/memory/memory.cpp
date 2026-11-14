@@ -1,4 +1,4 @@
-#include "nerith/memory.h"
+#include "nerith/memory/memory.h"
 
 #include <stdexcept>
 

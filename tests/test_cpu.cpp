@@ -2,8 +2,8 @@
 #include <iostream>
 #include <vector>
 
-#include "nerith/cpu.h"
-#include "nerith/memory.h"
+#include "nerith/memory/memory.h"
+#include "nerith/toy/cpu.h"
 
 namespace {
 

@@ -1,10 +1,10 @@
-#include "nerith/disassembler.h"
+#include "nerith/toy/disassembler.h"
 
 #include <cstdint>
 #include <iomanip>
 #include <sstream>
 
-#include "nerith/cpu.h"
+#include "nerith/toy/cpu.h"
 
 namespace nerith {
 

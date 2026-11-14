@@ -2,7 +2,7 @@
 #include <iostream>
 #include <stdexcept>
 
-#include "nerith/memory.h"
+#include "nerith/memory/memory.h"
 
 namespace {
 

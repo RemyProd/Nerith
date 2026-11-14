@@ -1,4 +1,4 @@
-#include "nerith/cpu.h"
+#include "nerith/toy/cpu.h"
 
 #include <stdexcept>
 
