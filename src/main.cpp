@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "nerith/cpu.h"
+#include "nerith/disassembler.h"
 #include "nerith/memory.h"
 
 int main() {
@@ -25,6 +26,9 @@ int main() {
     // le programme est charge en memoire, a l'adresse 0
     nerith::Memory memory(64);
     memory.load(0, program);
+
+    // on affiche le programme en clair avant de l'executer
+    std::cout << "Programme :\n" << nerith::disassemble_range(memory, 0, 6) << "\n";
 
     nerith::Cpu cpu;
     const nerith::Status status = nerith::run(cpu, memory);

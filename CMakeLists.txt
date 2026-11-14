@@ -9,6 +9,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 add_library(nerith_core
     src/cpu.cpp
     src/memory.cpp
+    src/disassembler.cpp
 )
 target_include_directories(nerith_core PUBLIC include)
 if(MSVC)
@@ -30,3 +31,7 @@ add_test(NAME cpu COMMAND test_cpu)
 add_executable(test_memory tests/test_memory.cpp)
 target_link_libraries(test_memory PRIVATE nerith_core)
 add_test(NAME memory COMMAND test_memory)
+
+add_executable(test_disassembler tests/test_disassembler.cpp)
+target_link_libraries(test_disassembler PRIVATE nerith_core)
+add_test(NAME disassembler COMMAND test_disassembler)
