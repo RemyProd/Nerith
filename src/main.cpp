@@ -1,3 +1,4 @@
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -93,6 +94,7 @@ const char* ppc_status_text(nerith::ppc::Status status) {
     switch (status) {
         case nerith::ppc::Status::Running:            return "toujours en cours";
         case nerith::ppc::Status::Halted:             return "arret normal";
+        case nerith::ppc::Status::SystemCall:         return "appel systeme (sc) : rien ne le traite encore";
         case nerith::ppc::Status::InvalidInstruction: return "instruction invalide";
         case nerith::ppc::Status::OutOfBounds:        return "acces hors limites";
         case nerith::ppc::Status::StepLimit:          return "trop d'instructions (boucle infinie ?)";
@@ -107,6 +109,12 @@ void print_ppc_registers(const nerith::ppc::Cpu& cpu) {
             std::cout << "r" << i << "=" << cpu.gpr[i] << " ";
         }
     }
+    for (std::size_t i = 0; i < cpu.fpr.size(); i++) {   // registres flottants : affiches comme des nombres
+        if (cpu.fpr[i] != 0) {
+            std::cout << "f" << i << "=" << std::setprecision(17) << std::bit_cast<double>(cpu.fpr[i]) << " ";
+        }
+    }
+    std::cout << std::setprecision(6);
     std::cout << "lr=" << cpu.lr << " cr=0x" << std::hex << std::setw(8) << std::setfill('0')
               << cpu.cr << std::dec << std::setfill(' ');
 }

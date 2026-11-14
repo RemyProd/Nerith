@@ -139,7 +139,7 @@ int main() {
     check(text(0x4E800420) == "bctr", "bctr");
     check(text(0x4E800421) == "bctrl", "bctrl");
     check(text(0x4E800021) == "blrl", "blrl");
-    check(decode(0x42010008).kind == Kind::Unknown, "bdnz avec BI different de 0 : pas gere");
+    check(text(0x42010008) == "bc 16, 1, +8", "BO = 16 avec BI different de 0 : forme generale bc");
     check(decode(0x7C6A02A6).kind == Kind::Unknown, "mfspr d'un autre registre (spr 10) pas gere");
 
     // mots non reconnus : jamais d'exception

@@ -56,6 +56,22 @@ enum class Kind {
     // Retenue (bit CA du registre XER) : addition/soustraction avec retenue, decalages arithmetiques
     Addic, AddicDot, Subfic, Addc, Adde, Subfc, Subfe, Addze, Addme, Subfze, Subfme,
     Sraw, Srad, Srawi, Sradi, Mfxer, Mtxer,
+    // Registre de conditions (CR) : copie de champ, operations sur un bit, lecture/ecriture complete
+    Mcrf, Crand, Crnand, Cror, Crxor, Crnor, Creqv, Crandc, Crorc,
+    Mfcr, Mfocrf, Mtcrf, Mtocrf,
+    // Sauts conditionnels indirects (vers LR ou CTR), appel systeme, barrieres memoire, verrous atomiques
+    Bclr, Bcctr, Sc, Sync, Eieio, Isync,
+    Lwarx, Ldarx, Stwcx, Stdcx,
+    // Flottants : lecture/ecriture (s = 32 bits, d = 64 bits, u = avec mise a jour, x = indexe)
+    Lfs, Lfsu, Lfd, Lfdu, Stfs, Stfsu, Stfd, Stfdu,
+    Lfsx, Lfsux, Lfdx, Lfdux, Stfsx, Stfsux, Stfdx, Stfdux, Stfiwx,
+    // Flottants : calculs (la lettre s a la fin = resultat arrondi a 32 bits)
+    Fadd, Fadds, Fsub, Fsubs, Fmul, Fmuls, Fdiv, Fdivs, Fsqrt, Fsqrts, Fres, Frsqrte, Fsel,
+    Fmadd, Fmadds, Fmsub, Fmsubs, Fnmadd, Fnmadds, Fnmsub, Fnmsubs,
+    // Flottants : copies, conversions, comparaisons
+    Fmr, Fneg, Fabs, Fnabs, Frsp, Fctiw, Fctiwz, Fctid, Fctidz, Fcfid, Fcmpu, Fcmpo,
+    // Registre d'etat des flottants (FPSCR)
+    Mffs, Mtfsf, Mtfsb0, Mtfsb1, Mtfsfi, Mcrfs,
 };
 
 // Le resultat du decodage d'un mot de 32 bits.
@@ -63,18 +79,20 @@ enum class Kind {
 struct Instruction {
     Kind kind = Kind::Unknown;
     std::uint32_t word = 0;   // le mot d'origine
-    std::uint8_t rd = 0;      // registre destination (ou source pour stw et ori : champ rS)
+    std::uint8_t rd = 0;      // registre destination (ou source pour stw et ori : champ rS) ; flottants : frD / frS
     std::uint8_t ra = 0;
     std::uint8_t rb = 0;
+    std::uint8_t frc = 0;     // flottants : 3e registre source (champ frC, bits 21-25) : fmul, fmadd, fsel...
     std::int32_t imm = 0;     // valeur immediate (avec signe) ou deplacement du saut, en octets
-    bool absolute = false;    // B : bit AA (adresse absolue au lieu de relative)
-    bool link = false;        // B, Blr, Bctr : bit LK (sauvegarde l'adresse de retour dans LR)
+    bool absolute = false;    // B, Bc : bit AA (adresse absolue au lieu de relative)
+    bool link = false;        // B, Bc, Blr, Bctr, Bclr, Bcctr : bit LK (sauvegarde l'adresse de retour dans LR)
     std::uint8_t sh = 0;      // Rlwinm : rotation a gauche (0 a 31) ; Rldicl... : 0 a 63
     std::uint8_t mb = 0;      // Rlwinm : debut du masque (bit 0 = poids fort des 32 bits)
     std::uint8_t me = 0;      // Rlwinm : fin du masque
     std::uint8_t crf = 0;     // Cmpwi : numero du champ de CR (0 a 7)
-    std::uint8_t bo = 0;      // Bc : 12 = saute si le bit est a 1, 4 = a 0, 16 = bdnz, 18 = bdz
-    std::uint8_t bi = 0;      // Bc : numero du bit de CR teste (0 a 31 ; champ = bi / 4)
+    std::uint8_t bo = 0;      // Bc, Bclr, Bcctr : les 5 bits BO (16 = pas de test de CR, 8 = valeur du bit attendue,
+                              //                     4 = pas de decrement de CTR, 2 = saute si CTR vaut 0)
+    std::uint8_t bi = 0;      // Bc... : numero du bit de CR teste (0 a 31 ; champ = bi / 4) ; Mcrf : champ source
 };
 
 // Decode un mot de 32 bits (deja lu en big-endian, par exemple avec Memory::read32).

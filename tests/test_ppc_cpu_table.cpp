@@ -314,30 +314,65 @@ int main() {
     {
         for (std::size_t n = 0; n < nerith::ppc::op_table_size(); n++) {
             const OpInfo& op = nerith::ppc::op_table()[n];
-            std::uint32_t word = (op.opcode << 26) | (3u << 21) | (4u << 16);
+            // un mot valide pour chaque disposition : rD = 3, rA = 4, rB = 5 (les champs reserves restent a 0)
+            std::uint32_t word = op.opcode << 26;
+            const std::uint32_t d = 3u << 21;
+            const std::uint32_t a = 4u << 16;
+            const std::uint32_t b = 5u << 11;
             switch (op.layout) {
                 case Layout::RtRaRb:
                 case Layout::RaRsRb:
                 case Layout::RtRbRa:
                 case Layout::MemX:
-                    word |= 5u << 11;
+                case Layout::CrBits:
+                case Layout::FMemX:
+                case Layout::FA3:
+                    word |= d | a | b;
                     break;
                 case Layout::RaRsSh:
-                    word |= 3u << 11;
+                    word |= d | a | (3u << 11);
                     break;
                 case Layout::RtRaSimm:
                 case Layout::RaRsUimm:
                 case Layout::MemD:
-                    word |= 8u;
-                    break;
                 case Layout::MemDS:
-                    word |= 8u;
+                case Layout::FMemD:
+                    word |= d | a | 8u;
                     break;
                 case Layout::RaRs:
                 case Layout::RtRa:
+                    word |= d | a;
+                    break;
+                case Layout::FA3c:
+                    word |= d | a | (5u << 6);
+                    break;
+                case Layout::FA4:
+                    word |= d | a | b | (6u << 6);
+                    break;
+                case Layout::FA2:
+                case Layout::FX2:
+                    word |= d | b;
+                    break;
+                case Layout::FCmp:
+                    word |= (1u << 23) | a | b;
+                    break;
+                case Layout::FrD:
+                    word |= d;
+                    break;
+                case Layout::BtOnly:
+                    word |= 5u << 21;
+                    break;
+                case Layout::FmFrb:
+                    word |= (0x0Fu << 17) | b;
+                    break;
+                case Layout::CrfImm:
+                    word |= (1u << 23) | (5u << 12);
+                    break;
+                case Layout::CrfCrf:
+                    word |= (1u << 23) | (2u << 18);
                     break;
             }
-            if (op.opcode == 31) {
+            if (op.opcode == 31 || op.opcode == 19 || op.opcode == 59 || op.opcode == 63) {
                 word |= static_cast<std::uint32_t>(op.xo) << 1;
             } else if (op.opcode == 58 || op.opcode == 62) {
                 word |= static_cast<std::uint32_t>(op.xo);

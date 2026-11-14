@@ -15,6 +15,10 @@ struct Cpu {
     std::uint64_t lr = 0;                  // registre de lien : adresse de retour (bl, blr)
     std::uint64_t ctr = 0;                 // registre compteur : boucles (bdnz) et sauts indirects (bctr)
     std::uint32_t cr = 0;                  // registre de conditions : 8 champs de 4 bits (LT, GT, EQ, SO)
+    std::array<std::uint64_t, 32> fpr{};   // f0 a f31 : 64 bits chacun, gardes tels quels (un double IEEE 754)
+    std::uint32_t fpscr = 0;               // etat des flottants : mode d'arrondi (bits 30-31), resultat de la derniere comparaison (bits 16-19)...
+    bool reserved = false;                 // une reservation existe (posee par lwarx ou ldarx, consommee par stwcx. ou stdcx.)
+    std::uint64_t reserve_address = 0;     // adresse de cette reservation
     std::uint32_t xer = 0;                 // registre d'exception : SO = 0x80000000, OV = 0x40000000, CA (retenue) = 0x20000000
 };
 
@@ -25,6 +29,7 @@ struct Cpu {
 enum class Status {
     Running,              // l'instruction a ete executee, on peut continuer
     Halted,               // blr vers l'adresse 0 : le programme est termine
+    SystemCall,           // sc : l'appel systeme est a traiter par l'appelant ; pc pointe deja sur l'instruction suivante
     InvalidInstruction,   // mot inconnu ou pas encore gere
     OutOfBounds,          // acces en dehors de la memoire
     StepLimit,            // run : trop d'instructions (protege des boucles infinies)

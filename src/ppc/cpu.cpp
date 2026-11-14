@@ -1,6 +1,9 @@
 #include "nerith/ppc/cpu.h"
 
+#include <bit>
+#include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <stdexcept>
 
 #include "nerith/ppc/decoder.h"
@@ -109,6 +112,49 @@ unsigned count_leading_zeros(std::uint64_t value, unsigned bits) {
     return count;
 }
 
+// Bit n de CR (le bit 0 est celui de poids FORT, comme dans les manuels).
+bool cr_bit(const Cpu& cpu, unsigned n) {
+    return ((cpu.cr >> (31u - n)) & 1u) != 0;
+}
+
+void set_cr_bit(Cpu& cpu, unsigned n, bool value) {
+    const std::uint32_t mask = 1u << (31u - n);
+    cpu.cr = value ? (cpu.cr | mask) : (cpu.cr & ~mask);
+}
+
+// Masque de CR pour un champ FXM de mtcrf/mfocrf : le bit de poids fort de FXM (bit 7) choisit le champ 0.
+std::uint32_t cr_mask_of_fxm(std::uint32_t fxm) {
+    std::uint32_t mask = 0;
+    for (unsigned field = 0; field < 8; field++) {
+        if (((fxm >> (7u - field)) & 1u) != 0) {
+            mask |= 0xFu << (4u * (7u - field));
+        }
+    }
+    return mask;
+}
+
+// Condition d'un saut conditionnel (champ BO) : decremente d'abord CTR si BO le demande.
+// Renvoie true si le saut est pris ; new_ctr recoit la nouvelle valeur de CTR (a ecrire si l'instruction aboutit).
+bool branch_taken(const Cpu& cpu, unsigned bo, unsigned bi, std::uint64_t& new_ctr, bool use_ctr) {
+    new_ctr = cpu.ctr;
+    bool ctr_ok = true;
+    if (use_ctr && (bo & 4u) == 0) {   // bit "ne pas toucher a CTR" absent
+        new_ctr -= 1;
+        ctr_ok = (new_ctr != 0) != ((bo & 2u) != 0);
+    }
+    const bool cond_ok = (bo & 16u) != 0 || cr_bit(cpu, bi) == ((bo & 8u) != 0);
+    return ctr_ok && cond_ok;
+}
+
+// Lit 4 ou 8 octets en big-endian a une adresse.
+std::uint64_t read_big_endian(Memory& memory, std::size_t where, unsigned size) {
+    std::uint64_t value = 0;
+    for (unsigned k = 0; k < size; k++) {
+        value = (value << 8) | memory.read8(where + k);
+    }
+    return value;
+}
+
 // Description d'un acces memoire de la table : taille, lecture ou ecriture, etc.
 struct MemOp {
     unsigned size;   // 1, 2, 4 ou 8 octets
@@ -201,6 +247,240 @@ Status do_memory(const Instruction& i, const MemOp& op, Cpu& cpu, Memory& memory
     }
     cpu.pc = next;
     return Status::Running;
+}
+
+
+// ============================ Flottants ============================
+
+constexpr std::uint64_t kSignBit = 0x8000000000000000ull;
+constexpr std::uint64_t kDefaultNan = 0x7FF8000000000000ull;   // le NaN "par defaut" de PowerPC (positif, silencieux)
+constexpr std::uint64_t kQuietBit = 0x0008000000000000ull;
+constexpr std::uint32_t kFpscrMask = 0x9FFFFFFFu;               // bits 1 et 2 (FEX, VX) : calcules par le processeur, pas ecrits
+
+double as_double(std::uint64_t bits) { return std::bit_cast<double>(bits); }
+std::uint64_t as_bits(double value) { return std::bit_cast<std::uint64_t>(value); }
+bool is_nan_bits(std::uint64_t bits) { return std::isnan(as_double(bits)); }
+
+// Resultat d'un calcul : si c'est un NaN, PowerPC renvoie le premier NaN en entree (rendu silencieux),
+// ou le NaN par defaut 0x7FF8... si les entrees ne sont pas des NaN (le processeur x86 donnerait 0xFFF8...).
+std::uint64_t result_bits(double value, std::uint64_t in_a, std::uint64_t in_b, std::uint64_t in_c) {
+    if (!std::isnan(value)) {
+        return as_bits(value);
+    }
+    for (const std::uint64_t input : {in_a, in_b, in_c}) {
+        if (is_nan_bits(input)) {
+            return input | kQuietBit;
+        }
+    }
+    return kDefaultNan;
+}
+
+// Arrondit un double a la precision simple (32 bits), pour fadds, fmuls, frsp...
+std::uint64_t single_bits(std::uint64_t bits) {
+    return is_nan_bits(bits) ? bits : as_bits(static_cast<double>(static_cast<float>(as_double(bits))));
+}
+
+// Arrondi vers un entier selon le mode RN de FPSCR (0 = au plus proche pair, 1 = vers zero, 2 = vers +inf, 3 = vers -inf).
+double round_by_mode(double value, unsigned mode) {
+    switch (mode) {
+        case 1:  return std::trunc(value);
+        case 2:  return std::ceil(value);
+        case 3:  return std::floor(value);
+        default: return std::nearbyint(value);   // mode d'arrondi par defaut de la machine : au plus proche pair
+    }
+}
+
+// Conversion en entier de 32 bits avec saturation (fctiw, fctiwz) : un NaN donne le plus petit nombre.
+std::uint32_t to_int32_saturated(double value, unsigned mode) {
+    if (std::isnan(value)) {
+        return 0x80000000u;
+    }
+    const double rounded = round_by_mode(value, mode);
+    if (rounded >= 2147483648.0) {
+        return 0x7FFFFFFFu;
+    }
+    if (rounded < -2147483648.0) {
+        return 0x80000000u;
+    }
+    return static_cast<std::uint32_t>(static_cast<std::int32_t>(rounded));
+}
+
+std::uint64_t to_int64_saturated(double value, unsigned mode) {
+    if (std::isnan(value)) {
+        return 0x8000000000000000ull;
+    }
+    const double rounded = round_by_mode(value, mode);
+    if (rounded >= 9223372036854775808.0) {
+        return 0x7FFFFFFFFFFFFFFFull;
+    }
+    if (rounded < -9223372036854775808.0) {
+        return 0x8000000000000000ull;
+    }
+    return static_cast<std::uint64_t>(static_cast<std::int64_t>(rounded));
+}
+
+// Description d'un acces memoire flottant.
+struct FpMemOp {
+    unsigned size;   // 4 ou 8 octets
+    bool store;
+    bool single;     // 4 octets : convertit entre le format 32 bits en memoire et le double du registre
+    bool update;     // "u" : rA recoit l'adresse calculee
+    bool indexed;    // "x" : adresse = rA + rB
+};
+
+bool fp_mem_op_of(Kind kind, FpMemOp& op) {
+    switch (kind) {
+        //                       taille store  single upd    idx
+        case Kind::Lfs:    op = {4, false, true,  false, false}; return true;
+        case Kind::Lfsu:   op = {4, false, true,  true,  false}; return true;
+        case Kind::Lfd:    op = {8, false, false, false, false}; return true;
+        case Kind::Lfdu:   op = {8, false, false, true,  false}; return true;
+        case Kind::Stfs:   op = {4, true,  true,  false, false}; return true;
+        case Kind::Stfsu:  op = {4, true,  true,  true,  false}; return true;
+        case Kind::Stfd:   op = {8, true,  false, false, false}; return true;
+        case Kind::Stfdu:  op = {8, true,  false, true,  false}; return true;
+        case Kind::Lfsx:   op = {4, false, true,  false, true};  return true;
+        case Kind::Lfsux:  op = {4, false, true,  true,  true};  return true;
+        case Kind::Lfdx:   op = {8, false, false, false, true};  return true;
+        case Kind::Lfdux:  op = {8, false, false, true,  true};  return true;
+        case Kind::Stfsx:  op = {4, true,  true,  false, true};  return true;
+        case Kind::Stfsux: op = {4, true,  true,  true,  true};  return true;
+        case Kind::Stfdx:  op = {8, true,  false, false, true};  return true;
+        case Kind::Stfdux: op = {8, true,  false, true,  true};  return true;
+        case Kind::Stfiwx: op = {4, true,  false, false, true};  return true;   // ecrit les 32 bits de poids faible tels quels
+        default: return false;
+    }
+}
+
+Status do_fp_memory(const Instruction& i, const FpMemOp& op, Cpu& cpu, Memory& memory, std::uint64_t next) {
+    if (op.update && i.ra == 0) {
+        return Status::InvalidInstruction;
+    }
+    const std::uint64_t offset =
+        op.indexed ? cpu.gpr[i.rb] : static_cast<std::uint64_t>(static_cast<std::int64_t>(i.imm));
+    const std::uint64_t address = base_value(cpu, i.ra) + offset;
+    const std::size_t where = static_cast<std::size_t>(address);
+
+    if (op.store) {
+        std::uint64_t value = cpu.fpr[i.rd];
+        if (op.single && i.kind != Kind::Stfiwx) {   // double du registre -> format 32 bits
+            value = std::bit_cast<std::uint32_t>(static_cast<float>(as_double(value)));
+        }
+        (void)memory.read8(where);
+        (void)memory.read8(where + op.size - 1);
+        for (unsigned k = 0; k < op.size; k++) {
+            memory.write8(where + k, static_cast<std::uint8_t>(value >> (8u * (op.size - 1 - k))));
+        }
+    } else {
+        const std::uint64_t value = read_big_endian(memory, where, op.size);
+        cpu.fpr[i.rd] = op.single ? as_bits(static_cast<double>(std::bit_cast<float>(static_cast<std::uint32_t>(value))))
+                                  : value;
+    }
+    if (op.update) {
+        cpu.gpr[i.ra] = address;
+    }
+    cpu.pc = next;
+    return Status::Running;
+}
+
+// Les calculs, copies, conversions et comparaisons flottants, et les instructions du registre FPSCR.
+// Renvoie false si l'instruction n'en fait pas partie. Ne touche pas a pc.
+bool execute_fp(const Instruction& i, Cpu& cpu) {
+    auto& f = cpu.fpr;
+    const std::uint64_t bits_a = f[i.ra];
+    const std::uint64_t bits_b = f[i.rb];
+    const std::uint64_t bits_c = f[i.frc];
+    const double a = as_double(bits_a);
+    const double b = as_double(bits_b);
+    const double c = as_double(bits_c);
+    const unsigned rounding = cpu.fpscr & 3u;
+
+    // pour fmadd et ses cousins : (a * c) +/- b d'un seul arrondi
+    auto arith = [&](double value, bool single, std::uint64_t in_a, std::uint64_t in_b, std::uint64_t in_c) {
+        const std::uint64_t bits = result_bits(value, in_a, in_b, in_c);
+        f[i.rd] = single ? single_bits(bits) : bits;
+    };
+
+    switch (i.kind) {
+        case Kind::Fadd:   arith(a + b, false, bits_a, bits_b, 0); return true;
+        case Kind::Fadds:  arith(a + b, true,  bits_a, bits_b, 0); return true;
+        case Kind::Fsub:   arith(a - b, false, bits_a, bits_b, 0); return true;
+        case Kind::Fsubs:  arith(a - b, true,  bits_a, bits_b, 0); return true;
+        case Kind::Fmul:   arith(a * c, false, bits_a, 0, bits_c); return true;
+        case Kind::Fmuls:  arith(a * c, true,  bits_a, 0, bits_c); return true;
+        case Kind::Fdiv:   arith(a / b, false, bits_a, bits_b, 0); return true;
+        case Kind::Fdivs:  arith(a / b, true,  bits_a, bits_b, 0); return true;
+        case Kind::Fsqrt:  arith(std::sqrt(b), false, 0, bits_b, 0); return true;
+        case Kind::Fsqrts: arith(std::sqrt(b), true,  0, bits_b, 0); return true;
+        case Kind::Fres:   arith(1.0 / b, true,  0, bits_b, 0); return true;   // exact, la machine donne une estimation
+        case Kind::Frsqrte: arith(1.0 / std::sqrt(b), false, 0, bits_b, 0); return true;
+        case Kind::Fmadd:  arith(std::fma(a, c, b),  false, bits_a, bits_b, bits_c); return true;
+        case Kind::Fmadds: arith(std::fma(a, c, b),  true,  bits_a, bits_b, bits_c); return true;
+        case Kind::Fmsub:  arith(std::fma(a, c, -b), false, bits_a, bits_b, bits_c); return true;
+        case Kind::Fmsubs: arith(std::fma(a, c, -b), true,  bits_a, bits_b, bits_c); return true;
+        case Kind::Fnmadd:  arith(-std::fma(a, c, b),  false, bits_a, bits_b, bits_c); return true;
+        case Kind::Fnmadds: arith(-std::fma(a, c, b),  true,  bits_a, bits_b, bits_c); return true;
+        case Kind::Fnmsub:  arith(-std::fma(a, c, -b), false, bits_a, bits_b, bits_c); return true;
+        case Kind::Fnmsubs: arith(-std::fma(a, c, -b), true,  bits_a, bits_b, bits_c); return true;
+        case Kind::Fsel:   // frD = (frA >= 0) ? frC : frB ; un NaN donne frB
+            f[i.rd] = (a >= 0.0) ? bits_c : bits_b;
+            return true;
+
+        case Kind::Fmr:   f[i.rd] = bits_b; return true;
+        case Kind::Fneg:  f[i.rd] = bits_b ^ kSignBit; return true;
+        case Kind::Fabs:  f[i.rd] = bits_b & ~kSignBit; return true;
+        case Kind::Fnabs: f[i.rd] = bits_b | kSignBit; return true;
+        case Kind::Frsp:  f[i.rd] = single_bits(is_nan_bits(bits_b) ? (bits_b | kQuietBit) : bits_b); return true;
+
+        // le mot de 32 bits est dans les bits de poids faible ; les bits de poids fort sont indefinis (comme Dolphin : 0xFFF80000)
+        case Kind::Fctiw:  f[i.rd] = 0xFFF8000000000000ull | to_int32_saturated(b, rounding); return true;
+        case Kind::Fctiwz: f[i.rd] = 0xFFF8000000000000ull | to_int32_saturated(b, 1); return true;
+        case Kind::Fctid:  f[i.rd] = to_int64_saturated(b, rounding); return true;
+        case Kind::Fctidz: f[i.rd] = to_int64_saturated(b, 1); return true;
+        case Kind::Fcfid:  f[i.rd] = as_bits(static_cast<double>(static_cast<std::int64_t>(bits_b))); return true;
+
+        case Kind::Fcmpu:
+        case Kind::Fcmpo: {   // LT, GT, EQ ou "non ordonnes" (un des deux est un NaN) : 8, 4, 2, 1 ; rien n'est melange avec XER
+            const std::uint32_t result = std::isnan(a) || std::isnan(b) ? 1u : (a < b ? 8u : (a > b ? 4u : 2u));
+            const unsigned shift = 4u * (7u - i.crf);
+            cpu.cr = (cpu.cr & ~(0xFu << shift)) | (result << shift);
+            cpu.fpscr = (cpu.fpscr & ~0x0000F000u) | (result << 12);   // FPCC, bits 16-19
+            return true;
+        }
+
+        // --- registre FPSCR ---
+        case Kind::Mffs:   // les 32 bits de poids fort de frD sont indefinis (convention de Dolphin : 0xFFF80000)
+            f[i.rd] = 0xFFF8000000000000ull | cpu.fpscr;
+            return true;
+        case Kind::Mtfsf: {
+            const std::uint32_t mask = cr_mask_of_fxm(static_cast<std::uint32_t>(i.imm)) & kFpscrMask;
+            cpu.fpscr = (cpu.fpscr & ~mask) | (static_cast<std::uint32_t>(bits_b) & mask);
+            return true;
+        }
+        case Kind::Mtfsfi: {
+            const unsigned shift = 4u * (7u - i.crf);
+            const std::uint32_t mask = (0xFu << shift) & kFpscrMask;
+            cpu.fpscr = (cpu.fpscr & ~mask) | ((static_cast<std::uint32_t>(i.imm) << shift) & mask);
+            return true;
+        }
+        case Kind::Mtfsb0:
+        case Kind::Mtfsb1: {
+            const std::uint32_t bit = (0x80000000u >> i.rd) & kFpscrMask;
+            cpu.fpscr = i.kind == Kind::Mtfsb1 ? (cpu.fpscr | bit) : (cpu.fpscr & ~bit);
+            return true;
+        }
+        case Kind::Mcrfs: {   // copie un champ de FPSCR dans CR, puis efface les bits d'exception "collants" de ce champ
+            constexpr std::uint32_t kStickyBits = 0x9FF80700u;
+            const unsigned from = 4u * (7u - i.bi);
+            const unsigned to = 4u * (7u - i.crf);
+            const std::uint32_t field = (cpu.fpscr >> from) & 0xFu;
+            cpu.cr = (cpu.cr & ~(0xFu << to)) | (field << to);
+            cpu.fpscr &= ~(kStickyBits & (0xFu << from));
+            return true;
+        }
+        default:
+            return false;
+    }
 }
 
 // Les calculs de la table (logique, decalages, multiplications, rotations, comparaisons sans signe).
@@ -395,6 +675,14 @@ Status step(Cpu& cpu, Memory& memory) {
             cpu.pc = next;
             return Status::Running;
         }
+        FpMemOp fp_mem{};
+        if (fp_mem_op_of(i.kind, fp_mem)) {
+            return do_fp_memory(i, fp_mem, cpu, memory, next);
+        }
+        if (execute_fp(i, cpu)) {
+            cpu.pc = next;
+            return Status::Running;
+        }
 
         switch (i.kind) {
             case Kind::Addi:
@@ -558,15 +846,138 @@ Status step(Cpu& cpu, Memory& memory) {
             }
 
             case Kind::Bc: {
-                bool taken = false;
-                if (i.bo == 16 || i.bo == 18) {   // bdnz, bdz : on decremente CTR, puis on le teste
-                    cpu.ctr -= 1;
-                    taken = (i.bo == 16) ? (cpu.ctr != 0) : (cpu.ctr == 0);
-                } else {
-                    const bool bit = ((cpu.cr >> (31u - i.bi)) & 1u) != 0;
-                    taken = (i.bo == 12) ? bit : !bit;
+                std::uint64_t new_ctr = 0;
+                const bool taken = branch_taken(cpu, i.bo, i.bi, new_ctr, true);
+                cpu.ctr = new_ctr;
+                if (i.link) {
+                    cpu.lr = next;   // LR change meme si le saut n'est pas pris
                 }
-                cpu.pc = taken ? add_signed(cpu.pc, i.imm) : next;
+                const std::uint64_t target = i.absolute
+                                                 ? static_cast<std::uint64_t>(static_cast<std::uint32_t>(i.imm))
+                                                 : add_signed(cpu.pc, i.imm);
+                cpu.pc = taken ? target : next;
+                return Status::Running;
+            }
+
+            case Kind::Bclr: {
+                std::uint64_t new_ctr = 0;
+                const bool taken = branch_taken(cpu, i.bo, i.bi, new_ctr, true);
+                if (taken && !i.link && cpu.lr == 0) {
+                    return Status::Halted;   // retour vers 0 : fin du programme, rien ne change
+                }
+                const std::uint64_t target = cpu.lr & ~std::uint64_t{3};
+                cpu.ctr = new_ctr;
+                if (i.link) {
+                    cpu.lr = next;
+                }
+                cpu.pc = taken ? target : next;
+                return Status::Running;
+            }
+
+            case Kind::Bcctr: {   // CTR n'est jamais decremente ici : le decodeur refuse BO sans le bit 4
+                std::uint64_t unused = 0;
+                const bool taken = branch_taken(cpu, i.bo, i.bi, unused, false);
+                const std::uint64_t target = cpu.ctr & ~std::uint64_t{3};
+                if (i.link) {
+                    cpu.lr = next;
+                }
+                cpu.pc = taken ? target : next;
+                return Status::Running;
+            }
+
+            // --- registre de conditions (CR) ---
+            case Kind::Mcrf: {
+                const unsigned from = 4u * (7u - i.bi);
+                const unsigned to = 4u * (7u - i.crf);
+                cpu.cr = (cpu.cr & ~(0xFu << to)) | (((cpu.cr >> from) & 0xFu) << to);
+                cpu.pc = next;
+                return Status::Running;
+            }
+
+            case Kind::Crand:
+            case Kind::Crnand:
+            case Kind::Cror:
+            case Kind::Crxor:
+            case Kind::Crnor:
+            case Kind::Creqv:
+            case Kind::Crandc:
+            case Kind::Crorc: {   // rd = bit de destination (BT), ra = BA, rb = BB
+                const bool a = cr_bit(cpu, i.ra);
+                const bool b = cr_bit(cpu, i.rb);
+                bool result = false;
+                switch (i.kind) {
+                    case Kind::Crand:  result = a && b; break;
+                    case Kind::Crnand: result = !(a && b); break;
+                    case Kind::Cror:   result = a || b; break;
+                    case Kind::Crxor:  result = a != b; break;
+                    case Kind::Crnor:  result = !(a || b); break;
+                    case Kind::Creqv:  result = a == b; break;
+                    case Kind::Crandc: result = a && !b; break;
+                    default:           result = a || !b; break;   // crorc
+                }
+                set_cr_bit(cpu, i.rd, result);
+                cpu.pc = next;
+                return Status::Running;
+            }
+
+            case Kind::Mfcr:
+                cpu.gpr[i.rd] = cpu.cr;
+                cpu.pc = next;
+                return Status::Running;
+
+            case Kind::Mfocrf:   // seuls les champs choisis sont recopies, le reste de rD vaut 0
+                cpu.gpr[i.rd] = cpu.cr & cr_mask_of_fxm(static_cast<std::uint32_t>(i.imm));
+                cpu.pc = next;
+                return Status::Running;
+
+            case Kind::Mtcrf:
+            case Kind::Mtocrf: {
+                const std::uint32_t mask = cr_mask_of_fxm(static_cast<std::uint32_t>(i.imm));
+                cpu.cr = (cpu.cr & ~mask) | (static_cast<std::uint32_t>(cpu.gpr[i.rd]) & mask);
+                cpu.pc = next;
+                return Status::Running;
+            }
+
+            // --- appel systeme et barrieres ---
+            case Kind::Sc:
+                cpu.pc = next;
+                return Status::SystemCall;
+
+            case Kind::Sync:
+            case Kind::Eieio:
+            case Kind::Isync:   // un seul coeur, memoire immediate : rien a faire
+                cpu.pc = next;
+                return Status::Running;
+
+            // --- verrous atomiques : une reservation par processeur ---
+            case Kind::Lwarx:
+            case Kind::Ldarx: {
+                const std::uint64_t address = base_value(cpu, i.ra) + cpu.gpr[i.rb];
+                const unsigned size = i.kind == Kind::Lwarx ? 4u : 8u;
+                const std::uint64_t value = read_big_endian(memory, static_cast<std::size_t>(address), size);
+                cpu.gpr[i.rd] = value;
+                cpu.reserved = true;
+                cpu.reserve_address = address;
+                cpu.pc = next;
+                return Status::Running;
+            }
+
+            case Kind::Stwcx:
+            case Kind::Stdcx: {
+                const std::uint64_t address = base_value(cpu, i.ra) + cpu.gpr[i.rb];
+                const unsigned size = i.kind == Kind::Stwcx ? 4u : 8u;
+                const bool success = cpu.reserved && cpu.reserve_address == address;
+                if (success) {
+                    const std::size_t where = static_cast<std::size_t>(address);
+                    (void)memory.read8(where);
+                    (void)memory.read8(where + size - 1);   // les deux bouts existent : on peut ecrire
+                    for (unsigned k = 0; k < size; k++) {
+                        memory.write8(where + k, static_cast<std::uint8_t>(cpu.gpr[i.rd] >> (8u * (size - 1 - k))));
+                    }
+                }
+                cpu.reserved = false;
+                set_cr_bits(cpu, 0, success ? 2u : 0u);   // EQ si l'ecriture a eu lieu ; SO recopie depuis XER
+                cpu.pc = next;
                 return Status::Running;
             }
 
