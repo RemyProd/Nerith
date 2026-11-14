@@ -73,6 +73,7 @@ La version actuelle (`include/nerith/cpu.h`, `memory.h`, `disassembler.h`) s'éc
 - Résultat renvoyé par `run` : `Halted`, `InvalidInstruction`, `OutOfBounds`, `StepLimit` (garde-fou contre les boucles infinies). Pas d'état « actif/arrêté » : c'est ce `Status` qui le remplace.
 - Compteur d'instructions exécutées : `cpu.instructions_executed`.
 - Assembleur : `assemble` transforme un programme en texte (étiquettes, commentaires, décimal et hexadécimal) en octets ; erreurs signalées avec le numéro de ligne.
+- `step` exécute une seule instruction (`Status::Running` si le programme continue) ; `run` boucle sur `step` avec le garde-fou `StepLimit`. `nerith.exe --trace` s'appuie sur `step` pour afficher une trace d'exécution.
 - Désassembleur : `disassemble` et `disassemble_range`.
 - Tests automatiques avec CTest : `test_cpu`, `test_memory`, `test_assembler`, `test_disassembler`.
 - Pas de classe `VirtualCPU` : `Cpu` est une `struct` et `run` une fonction.
@@ -92,8 +93,8 @@ Le programme fonctionne, les résultats sont vérifiés et on peut expliquer cha
 
 ## Améliorations ultérieures
 - Charger le programme depuis un fichier.
-- Ajouter un mode pas-à-pas.
+- ~~Ajouter un mode pas-à-pas.~~ Fait (`step`).
 - ~~Ajouter un désassembleur simple.~~ Fait.
-- Ajouter une trace d'exécution.
+- ~~Ajouter une trace d'exécution.~~ Fait (`--trace`).
 - ~~Ajouter des tests unitaires.~~ Fait.
 - ~~Ajouter un assembleur (texte vers octets).~~ Fait.

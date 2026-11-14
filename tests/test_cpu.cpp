@@ -201,6 +201,32 @@ int main() {
         check(cpu.registers[0] == 1, "l'instruction Set a bien ete executee avant");
     }
 
+    // --- step : une instruction a la fois ---
+
+    {   // on avance pas a pas, et on regarde l'etat apres chaque instruction
+        Memory memory(64);
+        memory.load(0, {code(Op::Set), 0, 5, code(Op::Inc), 0, 0, code(Op::Halt), 0, 0});
+        Cpu cpu;
+
+        check(step(cpu, memory) == Status::Running, "step 1 : le programme continue");
+        check(cpu.registers[0] == 5, "step 1 : r0 vaut 5");
+        check(cpu.pc == 3, "step 1 : pc vaut 3");
+        check(cpu.instructions_executed == 1, "step 1 : 1 instruction executee");
+
+        check(step(cpu, memory) == Status::Running, "step 2 : le programme continue");
+        check(cpu.registers[0] == 6, "step 2 : r0 vaut 6");
+
+        check(step(cpu, memory) == Status::Halted, "step 3 : Halt arrete le programme");
+        check(cpu.instructions_executed == 3, "step 3 : 3 instructions executees");
+    }
+    {   // step signale aussi les erreurs
+        Memory memory(64);
+        memory.load(0, {0x77, 0, 0, code(Op::Set), 9, 1});
+        Cpu cpu;
+        check(step(cpu, memory) == Status::InvalidInstruction, "step : opcode inconnu");
+        check(step(cpu, memory) == Status::OutOfBounds, "step : registre 9 hors limites");
+    }
+
     if (failures == 0) {
         std::cout << "Tous les tests passent\n";
         return 0;

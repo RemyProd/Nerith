@@ -32,6 +32,7 @@ constexpr std::uint8_t code(Op op) {
 
 // Resultat de l'execution d'un programme.
 enum class Status {
+    Running,              // l'instruction s'est bien passee, le programme continue (renvoye par step)
     Halted,               // le programme s'est termine avec Halt
     InvalidInstruction,   // opcode inconnu
     OutOfBounds,          // registre inexistant, ou lecture hors de la memoire
@@ -43,6 +44,11 @@ struct Cpu {
     std::size_t pc = 0;   // program counter : adresse de la prochaine instruction
     std::size_t instructions_executed = 0;   // nombre d'instructions lues et executees
 };
+
+// Execute UNE seule instruction, celle qui est a l'adresse cpu.pc.
+// Renvoie Running si le programme peut continuer, Halted apres un Halt,
+// ou une erreur (InvalidInstruction, OutOfBounds). Ne renvoie jamais StepLimit.
+Status step(Cpu& cpu, Memory& memory);
 
 // Execute les instructions lues en memoire, a partir de cpu.pc,
 // jusqu'a Halt ou jusqu'a une erreur. Store peut modifier la memoire.

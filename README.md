@@ -65,14 +65,27 @@ ctest --test-dir build -C Debug --output-on-failure
 .\build\Debug\nerith.exe
 ```
 
-Le dossier `build/` est ignoré par Git. Pour l'instant, le programme assemble un petit programme écrit en texte (une boucle qui additionne 5 + 4 + 3 + 2 + 1), l'affiche en clair, l'exécute sur un CPU pédagogique à 4 registres et affiche le résultat. Ça sert d'exercice avant le vrai CPU PowerPC.
+Pour lancer un programme écrit en texte :
+
+```powershell
+.\build\Debug\nerith.exe examples\somme.asm
+```
+
+Avec `--trace`, il affiche chaque instruction exécutée et l'état des registres après elle :
+
+```powershell
+.\build\Debug\nerith.exe --trace examples\somme.asm
+```
+
+Sans argument, `nerith.exe` exécute un programme de démonstration. Le dossier `build/` est ignoré par Git. Pour l'instant, le programme assemble un programme écrit en texte, par exemple une boucle qui qui additionne 5 + 4 + 3 + 2 + 1, l'affiche en clair, l'exécute sur un CPU pédagogique à 4 registres et affiche le résultat. Ça sert d'exercice avant le vrai CPU PowerPC.
 
 ## Structure du dépôt
 
 ```
-include/nerith/   en-têtes publics (cpu.h, memory.h, assembler.h, disassembler.h)
+include/nerith/   en-têtes publics (cpu.h, memory.h, assembler.h, disassembler.h, file.h)
 src/              CPU pédagogique, mémoire, assembleur, désassembleur et programme de démonstration
 tests/            tests automatiques
+examples/         programmes d'exemple pour le CPU pédagogique (.asm)
 docs/             documentation du projet
 ```
 
