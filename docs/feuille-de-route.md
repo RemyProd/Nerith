@@ -43,11 +43,11 @@ Spécification : [Premier exercice](premier-exercice-cpu.md).
 ## Phase 3 — Architecture du projet réel
 Voir [Architecture](architecture.md).
 - [ ] Interfaces entre modules.
-- [ ] CMake.
-- [ ] Tests.
-- [ ] Logs et diagnostics.
-- [ ] Conventions de code.
-- [ ] Documentation des décisions.
+- [x] CMake. (bibliothèque `nerith_core`, exécutable, tests)
+- [x] Tests. (CTest, `check()`, un fichier par sujet)
+- [x] Logs et diagnostics. (`nerith/log.h`, `--verbose`, `--trace`)
+- [x] Conventions de code. ([conventions.md](conventions.md))
+- [x] Documentation des décisions. ([decisions.md](decisions.md))
 
 ## Phase 4 — CPU Xbox 360
 - [ ] Étudier PowerPC/Xenon.

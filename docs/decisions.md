@@ -10,15 +10,23 @@ Conserver les décisions importantes et leur justification. Ne pas effacer une a
 |---|---|---|---|
 | D-001 | Plateforme initiale | Retenue | Windows |
 | D-002 | Langage principal | Retenue | C++ |
-| D-003 | Build | Proposée | CMake |
+| D-003 | Build | Retenue | CMake |
 | D-004 | Dépôt | Retenue | GitHub public |
 | D-005 | Nom | Provisoire | Nerith (remplace Project Xenon) |
 | D-006 | Architecture | À définir | Modules indépendants |
 | D-007 | Kernel cible | À étudier | Architecture multi-version ; le dernier kernel ne garantit pas tous les jeux |
 | D-008 | API graphique | À étudier | Décider après recherche et prototype |
 | D-009 | Licence | Provisoire | BSD-3-Clause (copyright : RemyProd) |
+| D-010 | Conventions de code | Retenue | Conventions écrites (`docs/conventions.md`) et `.editorconfig`, sans formateur automatique |
+| D-011 | Logs | Retenue | Petit module maison (`nerith/log.h`), sans dépendance |
 
 ## Décisions détaillées
+
+### D-003 — Outil de build
+- **Date :** 2026-11-14
+- **État :** retenue (était « proposée »)
+- **Décision :** CMake, avec Visual Studio (MSVC) comme compilateur principal.
+- **Justification :** en usage depuis le premier code ; génère la solution Visual Studio, fonctionne aussi avec g++ (utile pour vérifier les avertissements avec `-Werror`).
 
 ### D-005 — Nom du projet
 - **Date :** 2026-11-14
@@ -42,6 +50,25 @@ Conserver les décisions importantes et leur justification. Ne pas effacer une a
 - **Justification :** licence permissive, compatible avec la réutilisation de code de Xenia, identique à celle du projet de référence ; changement possible plus tard tant que l'auteur est seul (par exemple vers la GPL si un risque de forks fermés apparaît).
 - **Conséquences :** fichier `LICENSE` à la racine du dépôt avec le copyright « RemyProd » ; ne pas copier de code GPL dans le dépôt ; garder les notices de copyright pour tout code tiers repris ; engagement possible dans le README (jamais vendu, jamais fermé).
 - **Limite :** ce n'est pas un avis juridique. La licence ne règle pas la question des droits Microsoft : aucun BIOS, firmware, clé ou jeu dans le dépôt.
+
+### D-010 — Conventions de code
+- **Date :** 2026-11-14
+- **État :** retenue, révisable
+- **Contexte :** le code existant (CPU, mémoire, assembleur, fichiers) suit déjà des habitudes. Il vaut mieux les écrire avant que le projet grandisse.
+- **Options étudiées :** (1) conventions écrites + `.editorconfig` ; (2) en plus, un formateur automatique (`clang-format`) ; (3) rien de formel.
+- **Décision :** option 1. Voir `docs/conventions.md`.
+- **Justification :** un outil de moins à apprendre pendant la phase d'apprentissage ; les conventions décrivent ce qui est déjà fait. Un formateur automatique pourra être ajouté plus tard.
+- **Conséquences :** le code et les commentaires restent en ASCII (problèmes d'encodage MSVC évités) ; zéro avertissement au niveau maximum ; chaque comportement nouveau a un test.
+
+### D-011 — Logs
+- **Date :** 2026-11-14
+- **État :** retenue, révisable
+- **Contexte :** besoin de messages de diagnostic (erreurs, étapes, détails) distincts de la sortie normale du programme.
+- **Options étudiées :** (1) petit module maison ; (2) bibliothèque externe (par exemple spdlog) ; (3) `std::cerr` partout.
+- **Décision :** option 1 : `nerith/log.h`, quatre niveaux (`Debug`, `Info`, `Warning`, `Error`) plus `Off`, flux configurable (utile pour les tests), niveau par défaut `Warning`, option `--verbose` pour passer à `Debug`.
+- **Justification :** aucune dépendance, une centaine de lignes, testable, suffisant pour un seul thread.
+- **Limites :** **pas sûr pour plusieurs threads** (variables globales sans protection). À revoir quand l'émulation multi-thread (6 threads matériels sur Xenon) arrivera, soit en protégeant le module, soit en passant à une bibliothèque. Pas de log dans la boucle chaude du CPU.
+- **Conséquences :** `main` utilise `log_info`/`log_error` ; les résultats du programme restent sur la sortie standard.
 
 ## Format d'une décision
 

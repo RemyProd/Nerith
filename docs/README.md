@@ -1,6 +1,6 @@
 # Documentation de Nerith
 
-Documentation du projet, en français. Nerith est un projet d'émulateur Xbox 360 indépendant, en phase de préparation : aucun code n'est encore écrit.
+Documentation du projet, en français. Nerith est un projet d'émulateur Xbox 360 indépendant, en phase d'apprentissage : le code actuel est un CPU pédagogique, pas encore un émulateur Xbox 360.
 
 | Document | Contenu |
 |---|---|
@@ -11,6 +11,7 @@ Documentation du projet, en français. Nerith est un projet d'émulateur Xbox 36
 | [Architecture](architecture.md) | Modules envisagés et arborescence cible du dépôt |
 | [Apprentissage C++](apprentissage-cpp.md) | Parcours d'apprentissage prévu |
 | [Premier exercice](premier-exercice-cpu.md) | Spécification d'un mini-CPU pédagogique |
+| [Conventions de code](conventions.md) | Organisation, noms, erreurs, logs, tests, Git |
 | [Décisions techniques](decisions.md) | Registre des décisions et questions ouvertes |
 
 Ces documents évoluent avec le projet.

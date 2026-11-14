@@ -45,7 +45,7 @@ Le détail évolue au fil du travail : voir [docs/feuille-de-route.md](docs/feui
 
 ## Documentation
 
-La documentation du projet (vision, périmètre, architecture, décisions techniques) est dans le dossier [docs/](docs/README.md).
+La documentation du projet (vision, périmètre, architecture, conventions de code, décisions techniques) est dans le dossier [docs/](docs/README.md).
 
 ## Environnement de développement
 
@@ -77,12 +77,12 @@ Avec `--trace`, il affiche chaque instruction exécutée et l'état des registre
 .\build\Debug\nerith.exe --trace examples\somme.asm
 ```
 
-Sans argument, `nerith.exe` exécute un programme de démonstration. Le dossier `build/` est ignoré par Git. Pour l'instant, le programme assemble un programme écrit en texte, par exemple une boucle qui qui additionne 5 + 4 + 3 + 2 + 1, l'affiche en clair, l'exécute sur un CPU pédagogique à 4 registres et affiche le résultat. Ça sert d'exercice avant le vrai CPU PowerPC.
+Avec `--verbose`, il affiche aussi des messages de diagnostic (lecture du fichier, assemblage, fin de l'exécution). Les deux options se combinent. Sans argument, `nerith.exe` exécute un programme de démonstration. Le dossier `build/` est ignoré par Git. Pour l'instant, le programme assemble un programme écrit en texte, par exemple une boucle qui qui additionne 5 + 4 + 3 + 2 + 1, l'affiche en clair, l'exécute sur un CPU pédagogique à 4 registres et affiche le résultat. Ça sert d'exercice avant le vrai CPU PowerPC.
 
 ## Structure du dépôt
 
 ```
-include/nerith/   en-têtes publics (cpu.h, memory.h, assembler.h, disassembler.h, file.h)
+include/nerith/   en-têtes publics (cpu.h, memory.h, assembler.h, disassembler.h, file.h, log.h)
 src/              CPU pédagogique, mémoire, assembleur, désassembleur et programme de démonstration
 tests/            tests automatiques
 examples/         programmes d'exemple pour le CPU pédagogique (.asm)

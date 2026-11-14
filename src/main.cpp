@@ -11,6 +11,7 @@
 #include "nerith/cpu.h"
 #include "nerith/disassembler.h"
 #include "nerith/file.h"
+#include "nerith/log.h"
 #include "nerith/memory.h"
 
 namespace {
@@ -74,31 +75,42 @@ nerith::Status run_with_trace(nerith::Cpu& cpu, nerith::Memory& memory, std::siz
 }  // namespace
 
 int main(int argc, char* argv[]) {
-    // arguments : [--trace] [programme.asm]
+    // arguments : [--trace] [--verbose] [programme.asm]
     bool trace = false;
     const char* path = nullptr;
     for (int i = 1; i < argc; i++) {
         const std::string argument = argv[i];
         if (argument == "--trace" && !trace) {
             trace = true;
+        } else if (argument == "--verbose") {
+            nerith::set_log_level(nerith::LogLevel::Debug);
         } else if (path == nullptr && argument.rfind("--", 0) != 0) {
             path = argv[i];
         } else {
-            std::cerr << "Usage : nerith [--trace] [programme.asm]\n";
+            std::cerr << "Usage : nerith [--trace] [--verbose] [programme.asm]\n";
             return 2;
         }
     }
 
     try {
         // le texte vient d'un fichier si on en donne un, sinon du programme de demonstration
+        if (path != nullptr) {
+            nerith::log_info(std::string("lecture du fichier ") + path);
+        } else {
+            nerith::log_info("aucun fichier : programme de demonstration");
+        }
         const std::string source = (path != nullptr) ? nerith::read_text_file(path) : kDemoProgram;
 
         // l'assembleur transforme le texte en octets
         const std::vector<std::uint8_t> program = nerith::assemble(source);
+        nerith::log_info("assemblage reussi : " + std::to_string(program.size() / 3) +
+                         " instructions, " + std::to_string(program.size()) + " octets");
 
         // le programme est charge en memoire, a l'adresse 0
         nerith::Memory memory(256);
         memory.load(0, program);
+        nerith::log_debug("programme charge a l'adresse 0, memoire de " +
+                          std::to_string(memory.size()) + " octets");
 
         // on affiche le programme en clair avant de l'executer
         std::cout << "Programme :\n"
@@ -108,6 +120,8 @@ int main(int argc, char* argv[]) {
         const nerith::Status status =
             trace ? run_with_trace(cpu, memory, 1000) : nerith::run(cpu, memory);
 
+        nerith::log_info(std::string("fin de l'execution : ") + status_text(status));
+
         std::cout << (trace ? "\n" : "") << "Fin : " << status_text(status) << "\n";
         for (std::size_t i = 0; i < cpu.registers.size(); i++) {
             std::cout << "r" << i << " = " << cpu.registers[i] << "\n";
@@ -116,9 +130,9 @@ int main(int argc, char* argv[]) {
         std::cout << "instructions executees = " << cpu.instructions_executed << "\n";
         return status == nerith::Status::Halted ? 0 : 1;
     } catch (const nerith::AssemblyError& error) {
-        std::cerr << "Erreur d'assemblage, " << error.what() << "\n";
+        nerith::log_error(std::string("Erreur d'assemblage, ") + error.what());
     } catch (const std::exception& error) {
-        std::cerr << "Erreur : " << error.what() << "\n";
+        nerith::log_error(std::string("Erreur : ") + error.what());
     }
     return 1;
 }
