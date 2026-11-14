@@ -41,7 +41,11 @@ L'objectif n'est pas de rivaliser avec les projets existants, comme [Xenia](http
 | 9 | Périphériques |
 | 10 | Compatibilité |
 
-Le détail évolue au fil du travail.
+Le détail évolue au fil du travail : voir [docs/feuille-de-route.md](docs/feuille-de-route.md).
+
+## Documentation
+
+La documentation du projet (vision, périmètre, architecture, décisions techniques) est dans le dossier [docs/](docs/README.md).
 
 ## Environnement de développement
 
