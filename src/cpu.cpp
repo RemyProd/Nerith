@@ -32,6 +32,9 @@ Status run(Cpu& cpu, const std::vector<std::uint8_t>& program) {
                 case Op::Inc:
                     cpu.registers.at(reg) += 1;
                     break;
+                case Op::Dec:
+                    cpu.registers.at(reg) -= 1;
+                    break;
                 case Op::Halt:
                     return Status::Halted;
                 default:

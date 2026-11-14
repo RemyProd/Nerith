@@ -2,7 +2,7 @@
 
 Projet de recherche et de développement d'un émulateur Xbox 360 indépendant pour PC (Windows), écrit en C++.
 
-> **Statut : phase 0, documentation et préparation. Aucun code n'est encore écrit, et rien ne fonctionne pour l'instant.**
+> **Statut : phase 1 en cours (apprentissage du C++), avec un premier CPU pédagogique et des tests automatiques. Ce n'est pas encore un émulateur : il n'émule pas encore la Xbox 360 et ne lance aucun jeu.**
 
 *Nerith est un nom de travail provisoire : il peut changer avant la première version publique.*
 
@@ -54,7 +54,27 @@ La documentation du projet (vision, périmètre, architecture, décisions techni
 - CMake
 - Git
 
-Les instructions de compilation seront ajoutées avec le premier code.
+## Compiler et tester
+
+Depuis un terminal où CMake et Visual Studio sont disponibles (par exemple « Developer PowerShell for VS ») :
+
+```powershell
+cmake -S . -B build -A x64
+cmake --build build --config Debug
+ctest --test-dir build -C Debug --output-on-failure
+.\build\Debug\nerith.exe
+```
+
+Le dossier `build/` est ignoré par Git. Pour l'instant, le programme exécute un petit programme d'octets sur un CPU pédagogique à 4 registres, qui sert d'exercice avant le vrai CPU PowerPC.
+
+## Structure du dépôt
+
+```
+include/nerith/   en-têtes publics (cpu.h)
+src/              code du CPU pédagogique et programme de démonstration
+tests/            tests automatiques
+docs/             documentation du projet
+```
 
 ## Licence
 

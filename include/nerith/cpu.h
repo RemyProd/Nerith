@@ -15,6 +15,7 @@ enum class Op : std::uint8_t {
     Sub  = 0x04,   // registre -= registre numero "valeur"
     Mul  = 0x05,   // registre *= registre numero "valeur"
     Inc  = 0x06,   // registre += 1 (la valeur est ignoree)
+    Dec  = 0x07,   // registre -= 1 (la valeur est ignoree)
     Halt = 0xFF    // arret propre
 };
 

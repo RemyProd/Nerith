@@ -41,6 +41,15 @@ int main() {
         run(cpu, {code(Op::Set), 2, 9, code(Op::Inc), 2, 0, code(Op::Halt), 0, 0});
         check(cpu.registers[2] == 10, "Inc : r2 vaut 10");
     }
+
+
+    {   // Dec : r0 = 3 puis r0 - 1
+        Cpu cpu;
+        run(cpu, {code(Op::Set), 0, 3, code(Op::Dec), 0, 0, code(Op::Halt), 0, 0});
+        check(cpu.registers[0] == 2, "Dec : r0 vaut 2");
+    }
+
+
     {   // opcode inconnu
         Cpu cpu;
         const Status st = run(cpu, {0x77, 0, 0});
