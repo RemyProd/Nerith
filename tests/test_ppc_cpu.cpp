@@ -135,6 +135,94 @@ int main() {
         step(cpu, memory);
         check(cpu.cr == 0x88000000, "cmpwi cr1 : n'ecrase pas le champ 0");
     }
+    {   // sub, mullw, mr, or
+        Memory memory(32);
+        load_words(memory, {
+            0x7C652050,   // sub r3, r4, r5   (r3 = r4 - r5)
+            0x7CC429D6,   // mullw r6, r4, r5
+            0x7C832378,   // mr r3, r4 (ecrase r3)
+            0x7CC72B78}); // or r7, r6, r5
+        Cpu cpu;
+        cpu.gpr[4] = 10;
+        cpu.gpr[5] = 3;
+        step(cpu, memory);
+        check(cpu.gpr[3] == 7, "sub : 10 - 3 = 7");
+        step(cpu, memory);
+        check(cpu.gpr[6] == 30, "mullw : 10 * 3 = 30");
+        step(cpu, memory);
+        check(cpu.gpr[3] == 10, "mr : copie r4 dans r3");
+        step(cpu, memory);
+        check(cpu.gpr[7] == (30 | 3), "or");
+    }
+    {   // mullw avec signe, et sub qui passe sous zero
+        Memory memory(16);
+        load_words(memory, {0x7C6429D6, 0x7C652050});   // mullw r3, r4, r5 ; sub r3, r4, r5
+        Cpu cpu;
+        cpu.gpr[4] = 0xFFFFFFFD;   // -3 sur 32 bits
+        cpu.gpr[5] = 4;
+        step(cpu, memory);
+        check(cpu.gpr[3] == 0xFFFFFFFFFFFFFFF4ull, "mullw : -3 * 4 = -12 (signe etendu sur 64 bits)");
+        Cpu c2;
+        c2.gpr[4] = 1;
+        c2.gpr[5] = 2;
+        memory.write32(0, 0x7C652050);
+        step(c2, memory);
+        check(c2.gpr[3] == 0xFFFFFFFFFFFFFFFFull, "sub : 1 - 2 boucle sur 64 bits");
+        Cpu c3;
+        c3.gpr[4] = 0x10000;
+        c3.gpr[5] = 0x10000;
+        memory.write32(0, 0x7C6429D6);
+        step(c3, memory);
+        check(c3.gpr[3] == 0, "mullw : on garde seulement 32 bits (65536 * 65536 donne 0)");
+    }
+    {   // cmpw : deux registres
+        Memory memory(8);
+        memory.write32(0, 0x7C032000);   // cmpw r3, r4
+        Cpu cpu;
+        cpu.gpr[3] = 2;
+        cpu.gpr[4] = 5;
+        step(cpu, memory);
+        check(cpu.cr == 0x80000000, "cmpw : plus petit (LT)");
+        cpu.pc = 0;
+        cpu.gpr[3] = 5;
+        step(cpu, memory);
+        check(cpu.cr == 0x20000000, "cmpw : egal (EQ)");
+    }
+    {   // lis puis ori : construire une adresse de 32 bits
+        Memory memory(16);
+        load_words(memory, {
+            0x3C608200,   // lis r3, 0x8200
+            0x60631234}); // ori r3, r3, 0x1234
+        Cpu cpu;
+        step(cpu, memory);
+        // lis met 0x8200 dans les 16 bits au-dessus de ceux de poids faible, avec le signe etendu sur 64 bits
+        check(cpu.gpr[3] == 0xFFFFFFFF82000000ull, "lis : valeur sur 64 bits avec signe");
+        step(cpu, memory);
+        check((cpu.gpr[3] & 0xFFFFFFFFull) == 0x82001234, "lis + ori : 0x82001234 dans les 32 bits de poids faible");
+    }
+    {   // lbz et stb : un octet a la fois
+        Memory memory(256);
+        memory.write32(0x20, 0x11223344);
+        load_words(memory, {
+            0x88600020,   // lbz r3, 0x20(r0)
+            0x88800023,   // lbz r4, 0x23(r0)
+            0x98A00030}); // stb r5, 0x30(r0)
+        Cpu cpu;
+        cpu.gpr[5] = 0x1234;
+        step(cpu, memory);
+        step(cpu, memory);
+        check(cpu.gpr[3] == 0x11 && cpu.gpr[4] == 0x44, "lbz : big-endian, premier et dernier octet");
+        memory.write32(0x30, 0xAABBCCDD);
+        step(cpu, memory);
+        check(memory.read32(0x30) == 0x34BBCCDD, "stb : seul le premier octet change (0x34)");
+    }
+    {   // lbz hors memoire
+        Memory memory(8);
+        memory.write32(0, 0x88600100);   // lbz r3, 0x100(r0)
+        Cpu cpu;
+        cpu.gpr[3] = 5;
+        check(step(cpu, memory) == Status::OutOfBounds && cpu.gpr[3] == 5, "lbz hors memoire");
+    }
     {   // erreurs : rien ne change
         Memory memory(8);
         memory.write32(0, 0x12345678);

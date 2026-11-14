@@ -25,8 +25,11 @@ private:
 //
 // Syntaxe, une instruction par ligne :
 //   li r3, 5            addi r3, r4, -1       add r5, r3, r4
-//   ori r3, r4, 0x10    nop
-//   lwz r3, 8(r1)       stw r3, 8(r1)         (r0 entre parentheses = base 0)
+//   ori r3, r4, 0x10    nop                   lis r3, 0x8200      addis r3, r4, 1
+//   sub r3, r4, r5      (r3 = r4 - r5)        mullw r3, r4, r5    mr r3, r4     or r3, r4, r5
+//   cmpw r3, r4         cmpw cr1, r3, r4
+//   lwz r3, 8(r1)       stw r3, 8(r1)         lbz r3, 8(r1)       stb r3, 8(r1)
+//   (r0 entre parentheses = base 0)
 //   cmpwi r3, 0         cmpwi cr1, r3, 0
 //   b loop              bl func               blr
 //   beq loop   bne loop   blt loop   bgt loop   ble loop   bge loop   (ou "bne cr1, loop")

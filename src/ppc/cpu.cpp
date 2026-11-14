@@ -18,6 +18,18 @@ std::uint64_t add_signed(std::uint64_t value, std::int32_t offset) {
     return value + static_cast<std::uint64_t>(static_cast<std::int64_t>(offset));
 }
 
+// Ecrit le resultat d'une comparaison avec signe (32 bits) dans le champ crf de CR.
+void set_cr_field(Cpu& cpu, std::uint8_t crf, std::int32_t a, std::int32_t b) {
+    const std::uint32_t bits = a < b ? 8u : (a > b ? 4u : 2u);   // LT, GT ou EQ
+    const unsigned shift = 4u * (7u - crf);
+    cpu.cr = (cpu.cr & ~(0xFu << shift)) | (bits << shift);
+}
+
+// Les 32 bits de poids faible d'un registre, vus comme un nombre avec signe.
+std::int32_t low32(std::uint64_t value) {
+    return static_cast<std::int32_t>(static_cast<std::uint32_t>(value));
+}
+
 }  // namespace
 
 Status step(Cpu& cpu, Memory& memory) {
@@ -41,12 +53,53 @@ Status step(Cpu& cpu, Memory& memory) {
                 cpu.pc = next;
                 return Status::Running;
 
-            case Kind::Cmpwi: {
-                // comparaison avec signe sur les 32 bits de poids faible de rA
-                const std::int32_t a = static_cast<std::int32_t>(static_cast<std::uint32_t>(cpu.gpr[i.ra]));
-                const std::uint32_t bits = a < i.imm ? 8u : (a > i.imm ? 4u : 2u);
-                const unsigned shift = 4u * (7u - i.crf);
-                cpu.cr = (cpu.cr & ~(0xFu << shift)) | (bits << shift);
+            case Kind::Cmpwi:
+                set_cr_field(cpu, i.crf, low32(cpu.gpr[i.ra]), i.imm);
+                cpu.pc = next;
+                return Status::Running;
+
+            case Kind::Cmpw:
+                set_cr_field(cpu, i.crf, low32(cpu.gpr[i.ra]), low32(cpu.gpr[i.rb]));
+                cpu.pc = next;
+                return Status::Running;
+
+            case Kind::Addis:
+                cpu.gpr[i.rd] = base_value(cpu, i.ra) +
+                                static_cast<std::uint64_t>(static_cast<std::int64_t>(i.imm) * 65536);
+                cpu.pc = next;
+                return Status::Running;
+
+            case Kind::Sub:   // rD = rB - rA (les champs du mot sont dans cet ordre)
+                cpu.gpr[i.rd] = cpu.gpr[i.rb] - cpu.gpr[i.ra];
+                cpu.pc = next;
+                return Status::Running;
+
+            case Kind::Mullw: {
+                // produit des 32 bits de poids faible (avec signe) ; on garde 32 bits, etendus avec le signe
+                const std::int64_t product = static_cast<std::int64_t>(low32(cpu.gpr[i.ra])) *
+                                             static_cast<std::int64_t>(low32(cpu.gpr[i.rb]));
+                cpu.gpr[i.rd] = static_cast<std::uint64_t>(
+                    static_cast<std::int64_t>(low32(static_cast<std::uint64_t>(product))));
+                cpu.pc = next;
+                return Status::Running;
+            }
+
+            case Kind::Or:   // rA = rS | rB
+                cpu.gpr[i.ra] = cpu.gpr[i.rd] | cpu.gpr[i.rb];
+                cpu.pc = next;
+                return Status::Running;
+
+            case Kind::Lbz: {
+                const std::uint64_t address = add_signed(base_value(cpu, i.ra), i.imm);
+                const std::uint8_t value = memory.read8(static_cast<std::size_t>(address));
+                cpu.gpr[i.rd] = value;
+                cpu.pc = next;
+                return Status::Running;
+            }
+
+            case Kind::Stb: {
+                const std::uint64_t address = add_signed(base_value(cpu, i.ra), i.imm);
+                memory.write8(static_cast<std::size_t>(address), static_cast<std::uint8_t>(cpu.gpr[i.rd]));
                 cpu.pc = next;
                 return Status::Running;
             }

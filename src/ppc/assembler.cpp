@@ -204,6 +204,49 @@ std::uint32_t encode(const Line& line, const std::map<std::string, std::size_t>&
         return 0x7C000214u | (parse_register(line, op[0]) << 21) | (parse_register(line, op[1]) << 16) |
                (parse_register(line, op[2]) << 11);
     }
+    if (m == "lis") {
+        expect_operands(line, 2);
+        return (15u << 26) | (parse_register(line, op[0]) << 21) |
+               (static_cast<std::uint32_t>(parse_value(line, op[1], -32768, 65535)) & 0xFFFFu);
+    }
+    if (m == "addis") {
+        expect_operands(line, 3);
+        return (15u << 26) | (parse_register(line, op[0]) << 21) | (parse_register(line, op[1]) << 16) |
+               (static_cast<std::uint32_t>(parse_value(line, op[2], -32768, 65535)) & 0xFFFFu);
+    }
+    if (m == "sub") {   // sub rD, rA, rB = subf rD, rB, rA : les champs du mot sont inverses
+        expect_operands(line, 3);
+        return 0x7C000050u | (parse_register(line, op[0]) << 21) | (parse_register(line, op[2]) << 16) |
+               (parse_register(line, op[1]) << 11);
+    }
+    if (m == "mullw") {
+        expect_operands(line, 3);
+        return 0x7C0001D6u | (parse_register(line, op[0]) << 21) | (parse_register(line, op[1]) << 16) |
+               (parse_register(line, op[2]) << 11);
+    }
+    if (m == "or") {   // or rA, rS, rB
+        expect_operands(line, 3);
+        return 0x7C000378u | (parse_register(line, op[1]) << 21) | (parse_register(line, op[0]) << 16) |
+               (parse_register(line, op[2]) << 11);
+    }
+    if (m == "mr") {   // mr rA, rS = or rA, rS, rS
+        expect_operands(line, 2);
+        const std::uint32_t source = parse_register(line, op[1]);
+        return 0x7C000378u | (source << 21) | (parse_register(line, op[0]) << 16) | (source << 11);
+    }
+    if (m == "cmpw") {
+        std::uint32_t crf = 0;
+        std::size_t first = 0;
+        if (!op.empty() && looks_like_cr(to_lower(op[0]))) {
+            crf = static_cast<std::uint32_t>(op[0][2] - '0');
+            first = 1;
+        }
+        if (op.size() != first + 2) {
+            throw AssemblyError(line.number, "forme attendue : cmpw [crN,] rA, rB");
+        }
+        return 0x7C000000u | (crf << 23) | (parse_register(line, op[first]) << 16) |
+               (parse_register(line, op[first + 1]) << 11);
+    }
     if (m == "ori") {   // ori rA, rS, constante
         expect_operands(line, 3);
         return (24u << 26) | (parse_register(line, op[1]) << 21) | (parse_register(line, op[0]) << 16) |
@@ -213,12 +256,13 @@ std::uint32_t encode(const Line& line, const std::map<std::string, std::size_t>&
         expect_operands(line, 0);
         return 0x60000000u;
     }
-    if (m == "lwz" || m == "stw") {
+    if (m == "lwz" || m == "stw" || m == "lbz" || m == "stb") {
         expect_operands(line, 2);
         long long offset = 0;
         std::uint32_t base = 0;
         parse_memory_operand(line, op[1], offset, base);
-        return ((m == "lwz" ? 32u : 36u) << 26) | (parse_register(line, op[0]) << 21) | (base << 16) |
+        const std::uint32_t opcode = m == "lwz" ? 32u : (m == "stw" ? 36u : (m == "lbz" ? 34u : 38u));
+        return (opcode << 26) | (parse_register(line, op[0]) << 21) | (base << 16) |
                (static_cast<std::uint32_t>(offset) & 0xFFFFu);
     }
     if (m == "cmpwi") {

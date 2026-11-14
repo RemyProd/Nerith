@@ -9,11 +9,18 @@ namespace nerith::ppc {
 enum class Kind {
     Unknown,   // mot de 32 bits non reconnu (ou forme pas encore geree)
     Addi,      // addi rD, rA, SIMM   (rD = rA + SIMM ; si rA vaut 0, on utilise la valeur 0)
+    Addis,     // addis rD, rA, SIMM  (rA + SIMM * 65536 ; "lis rD, nombre" quand rA vaut 0)
     Add,       // add rD, rA, rB
+    Sub,       // sub rD, rA, rB      (rD = rA - rB ; dans le mot, les champs rA et rB sont inverses)
+    Mullw,     // mullw rD, rA, rB    (multiplication avec signe des 32 bits de poids faible)
+    Or,        // or rA, rS, rB       ("mr rA, rS" quand rS et rB sont identiques)
+    Cmpw,      // cmpw crfD, rA, rB   (compare deux registres, resultat dans un champ de CR)
     Ori,       // ori rA, rS, UIMM    (nop = ori 0, 0, 0)
     Cmpwi,     // cmpwi crfD, rA, SIMM (compare rA a un nombre, resultat dans un champ de CR)
     Lwz,       // lwz rD, d(rA)       (lire un mot de 32 bits)
     Stw,       // stw rS, d(rA)       (ecrire un mot de 32 bits)
+    Lbz,       // lbz rD, d(rA)       (lire un octet, complete par des 0)
+    Stb,       // stb rS, d(rA)       (ecrire un octet : les 8 bits de poids faible de rS)
     B,         // b / bl / ba / bla   (saut ; bl sauvegarde le retour dans LR)
     Bc,        // saut conditionnel : beq, bne, blt, bgt, ble, bge (selon un bit de CR)
     Blr,       // blr                 (retour de fonction : saute a LR)

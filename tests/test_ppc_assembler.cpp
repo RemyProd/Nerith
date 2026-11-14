@@ -59,6 +59,22 @@ int main() {
     check(one("bne -8") == 0x4082FFF8, "bne");
     check(one("ble cr1, +8") == 0x40850008, "ble cr1");
 
+    // instructions ajoutees ensuite (mots verifies avec llvm-mc)
+    check(one("sub r3, r4, r5") == 0x7C652050, "sub");
+    check(one("mullw r3, r4, r5") == 0x7C6429D6, "mullw");
+    check(one("cmpw r3, r4") == 0x7C032000, "cmpw");
+    check(one("cmpw cr1, r4, r5") == 0x7C842800, "cmpw cr1");
+    check(one("mr r3, r4") == 0x7C832378, "mr");
+    check(one("or r3, r4, r5") == 0x7C832B78, "or");
+    check(one("lbz r3, 8(r1)") == 0x88610008, "lbz");
+    check(one("stb r3, 8(r1)") == 0x98610008, "stb");
+    check(one("lis r3, 0x8200") == 0x3C608200, "lis");
+    check(one("lis r3, -1") == 0x3C60FFFF, "lis negatif");
+    check(one("addis r3, r4, -1") == 0x3C64FFFF, "addis");
+    check(ppc::to_text(ppc::decode(one("sub r3, r4, r5"))) == "sub r3, r4, r5", "aller-retour sub");
+    check(ppc::to_text(ppc::decode(one("mr r31, r0"))) == "mr r31, r0", "aller-retour mr");
+    check(fails_at("sub r3, r4\n", 1), "sub : operande manquante");
+
     // majuscules, hexadecimal, commentaires
     check(one("LI R3, 0x10 ; commentaire") == 0x38600010, "majuscules, hexa, commentaire");
     check(one("li r3, 5 # autre commentaire") == 0x38600005, "commentaire avec #");

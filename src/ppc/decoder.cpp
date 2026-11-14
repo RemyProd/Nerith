@@ -52,6 +52,27 @@ Instruction decode(std::uint32_t word) {
             }
             break;
 
+        case 15:   // addis (et lis)
+            result.kind = Kind::Addis;
+            result.rd = field_6_10(word);
+            result.ra = field_11_15(word);
+            result.imm = simm16(word);
+            break;
+
+        case 34:   // lbz
+            result.kind = Kind::Lbz;
+            result.rd = field_6_10(word);
+            result.ra = field_11_15(word);
+            result.imm = simm16(word);
+            break;
+
+        case 38:   // stb
+            result.kind = Kind::Stb;
+            result.rd = field_6_10(word);
+            result.ra = field_11_15(word);
+            result.imm = simm16(word);
+            break;
+
         case 14:   // addi
             result.kind = Kind::Addi;
             result.rd = field_6_10(word);
@@ -98,12 +119,29 @@ Instruction decode(std::uint32_t word) {
             }
             break;
 
-        case 31:   // add : seulement la forme simple (XO = 266, OE = 0, Rc = 0)
-            if (((word >> 1) & 0x3FF) == 266 && (word & 0x1) == 0) {
-                result.kind = Kind::Add;
+        case 31:   // instructions "registre, registre" : seulement les formes simples (Rc = 0)
+            if ((word & 0x1) == 0) {
                 result.rd = field_6_10(word);
                 result.ra = field_11_15(word);
                 result.rb = field_16_20(word);
+                switch ((word >> 1) & 0x3FF) {   // champ XO (avec le bit OE : on refuse OE = 1)
+                    case 266: result.kind = Kind::Add;   break;
+                    case 40:  result.kind = Kind::Sub;   break;
+                    case 235: result.kind = Kind::Mullw; break;
+                    case 444: result.kind = Kind::Or;    break;
+                    case 0:   // cmpw : seulement la forme 32 bits (L = 0)
+                        if (((word >> 21) & 0x1) == 0) {
+                            result.kind = Kind::Cmpw;
+                            result.crf = static_cast<std::uint8_t>((word >> 23) & 0x7);
+                            result.rd = 0;
+                        }
+                        break;
+                    default: break;
+                }
+                if (result.kind == Kind::Unknown) {
+                    result = Instruction{};
+                    result.word = word;
+                }
             }
             break;
 
@@ -120,6 +158,39 @@ std::string to_text(const Instruction& i) {
                 return "li " + reg_name(i.rd) + ", " + std::to_string(i.imm);
             }
             return "addi " + reg_name(i.rd) + ", " + reg_name(i.ra) + ", " + std::to_string(i.imm);
+
+        case Kind::Addis:
+            if (i.ra == 0) {
+                std::ostringstream out;
+                out << "lis " << reg_name(i.rd) << ", 0x" << std::hex << (static_cast<std::uint32_t>(i.imm) & 0xFFFF);
+                return out.str();
+            }
+            return "addis " + reg_name(i.rd) + ", " + reg_name(i.ra) + ", " + std::to_string(i.imm);
+
+        case Kind::Sub:   // rD = rB - rA dans le mot : on ecrit "sub rD, rB, rA"
+            return "sub " + reg_name(i.rd) + ", " + reg_name(i.rb) + ", " + reg_name(i.ra);
+
+        case Kind::Mullw:
+            return "mullw " + reg_name(i.rd) + ", " + reg_name(i.ra) + ", " + reg_name(i.rb);
+
+        case Kind::Or:   // rd est le champ rS, ra la destination
+            if (i.rd == i.rb) {
+                return "mr " + reg_name(i.ra) + ", " + reg_name(i.rd);
+            }
+            return "or " + reg_name(i.ra) + ", " + reg_name(i.rd) + ", " + reg_name(i.rb);
+
+        case Kind::Cmpw:
+            if (i.crf == 0) {
+                return "cmpw " + reg_name(i.ra) + ", " + reg_name(i.rb);
+            }
+            return "cmpw cr" + std::to_string(static_cast<int>(i.crf)) + ", " + reg_name(i.ra) + ", " +
+                   reg_name(i.rb);
+
+        case Kind::Lbz:
+            return "lbz " + reg_name(i.rd) + ", " + std::to_string(i.imm) + "(" + reg_name(i.ra) + ")";
+
+        case Kind::Stb:
+            return "stb " + reg_name(i.rd) + ", " + std::to_string(i.imm) + "(" + reg_name(i.ra) + ")";
 
         case Kind::Add:
             return "add " + reg_name(i.rd) + ", " + reg_name(i.ra) + ", " + reg_name(i.rb);

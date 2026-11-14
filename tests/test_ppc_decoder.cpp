@@ -61,6 +61,20 @@ int main() {
     check(text(0x40850008) == "ble cr1, +8", "ble cr1");
     check(decode(0x2C230000).kind == Kind::Unknown, "cmpdi (64 bits) pas encore gere");
 
+    // instructions ajoutees ensuite (mots verifies avec llvm-mc)
+    check(text(0x7C652050) == "sub r3, r4, r5", "sub");
+    check(text(0x7C6429D6) == "mullw r3, r4, r5", "mullw");
+    check(text(0x7C032000) == "cmpw r3, r4", "cmpw");
+    check(text(0x7C842800) == "cmpw cr1, r4, r5", "cmpw cr1");
+    check(text(0x7C832378) == "mr r3, r4", "mr");
+    check(text(0x7C832B78) == "or r3, r4, r5", "or");
+    check(text(0x88610008) == "lbz r3, 8(r1)", "lbz");
+    check(text(0x98610008) == "stb r3, 8(r1)", "stb");
+    check(text(0x3C608200) == "lis r3, 0x8200", "lis");
+    check(text(0x3C640001) == "addis r3, r4, 1", "addis");
+    check(decode(0x7C652051).kind == Kind::Unknown, "sub. (Rc = 1) pas encore gere");
+    check(decode(0x7C200000).kind == Kind::Unknown, "cmpd (64 bits) pas encore gere");
+
     // mots non reconnus : jamais d'exception
     check(decode(0x00000000).kind == Kind::Unknown, "0 : inconnu");
     check(text(0x12345678) == ".long 0x12345678", "texte : inconnu");
