@@ -4,14 +4,20 @@
 
 namespace nerith {
 
-Status run(Cpu& cpu, Memory& memory) {
+Status run(Cpu& cpu, Memory& memory, std::size_t max_steps) {
     try {
         while (true) {
+            // garde-fou : on ne laisse pas tourner une boucle infinie
+            if (cpu.instructions_executed >= max_steps) {
+                return Status::StepLimit;
+            }
+
             // fetch : lire l'instruction en memoire (les acces sont verifies)
             const std::uint8_t opcode = memory.read8(cpu.pc);
             const std::uint8_t reg    = memory.read8(cpu.pc + 1);
             const std::uint8_t value  = memory.read8(cpu.pc + 2);
             cpu.pc += 3;
+            ++cpu.instructions_executed;
 
             // decode + execute
             switch (static_cast<Op>(opcode)) {
@@ -38,6 +44,14 @@ Status run(Cpu& cpu, Memory& memory) {
                     break;
                 case Op::Store:
                     memory.write32(value, cpu.registers.at(reg));
+                    break;
+                case Op::Jmp:
+                    cpu.pc = value;
+                    break;
+                case Op::Jnz:
+                    if (cpu.registers.at(reg) != 0) {
+                        cpu.pc = value;
+                    }
                     break;
                 case Op::Halt:
                     return Status::Halted;

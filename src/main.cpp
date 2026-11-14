@@ -10,15 +10,16 @@ int main() {
     using nerith::code;
     using nerith::Op;
 
-    // r0 = 5 ; r1 = 20 ; r1 = r1 - r0 ; r1 est ecrit en memoire a l'adresse 32,
-    // puis relu dans r2 ; arret
+    // Somme de 5 + 4 + 3 + 2 + 1 avec une boucle :
+    //   r0 = 5 (compteur) ; r1 = 0 (somme)
+    //   adresse 6 : r1 += r0 ; r0 -= 1 ; si r0 != 0, retour a l'adresse 6
     const std::vector<std::uint8_t> program = {
-        code(Op::Set),  0, 5,
-        code(Op::Set),  1, 20,
-        code(Op::Sub),  1, 0,
-        code(Op::Store), 1, 32,
-        code(Op::Load),  2, 32,
-        code(Op::Halt), 0, 0
+        code(Op::Set),  0, 5,    // adresse 0
+        code(Op::Set),  1, 0,    // adresse 3
+        code(Op::Add),  1, 0,    // adresse 6  : debut de la boucle
+        code(Op::Dec),  0, 0,    // adresse 9
+        code(Op::Jnz),  0, 6,    // adresse 12 : si r0 != 0, saute a l'adresse 6
+        code(Op::Halt), 0, 0     // adresse 15
     };
 
     // le programme est charge en memoire, a l'adresse 0
@@ -36,7 +37,6 @@ int main() {
     for (std::size_t i = 0; i < cpu.registers.size(); i++) {
         std::cout << "r" << i << " = " << cpu.registers[i] << "\n";
     }
-
-    std::cout << "memoire[32..35] = " << memory.read32(32) << "\n";
+    std::cout << "instructions executees = " << cpu.instructions_executed << "\n";
     return 0;
 }

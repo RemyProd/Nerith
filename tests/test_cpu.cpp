@@ -70,6 +70,69 @@ int main() {
         check(st == Status::OutOfBounds, "programme sans Halt detecte");
     }
 
+    // --- Sauts : Jmp et Jnz, compteur d'instructions, garde-fou ---
+
+    {   // Jmp saute par-dessus une instruction
+        Memory memory(64);
+        memory.load(0, {
+            code(Op::Jmp),  0, 6,     // adresse 0 : saute a l'adresse 6
+            code(Op::Set),  0, 99,    // adresse 3 : sautee
+            code(Op::Set),  1, 7,     // adresse 6
+            code(Op::Halt), 0, 0});   // adresse 9
+        Cpu cpu;
+        const Status st = run(cpu, memory);
+        check(st == Status::Halted, "Jmp : arret normal");
+        check(cpu.registers[0] == 0, "Jmp : l'instruction sautee n'est pas executee");
+        check(cpu.registers[1] == 7, "Jmp : r1 vaut 7");
+        check(cpu.instructions_executed == 3, "Jmp : 3 instructions executees");
+    }
+    {   // Jnz ne saute pas si le registre vaut 0
+        Memory memory(64);
+        memory.load(0, {
+            code(Op::Set),  0, 0,
+            code(Op::Jnz),  0, 12,    // r0 vaut 0 : pas de saut
+            code(Op::Set),  1, 5,
+            code(Op::Halt), 0, 0});
+        Cpu cpu;
+        run(cpu, memory);
+        check(cpu.registers[1] == 5, "Jnz sans saut : l'instruction suivante est executee");
+    }
+    {   // Jnz saute si le registre n'est pas 0
+        Memory memory(64);
+        memory.load(0, {
+            code(Op::Set),  0, 1,
+            code(Op::Jnz),  0, 9,     // r0 vaut 1 : saut a l'adresse 9
+            code(Op::Set),  1, 5,     // sautee
+            code(Op::Halt), 0, 0});   // adresse 9
+        Cpu cpu;
+        run(cpu, memory);
+        check(cpu.registers[1] == 0, "Jnz avec saut : l'instruction sautee n'est pas executee");
+    }
+    {   // une vraie boucle : 5 + 4 + 3 + 2 + 1
+        Memory memory(64);
+        memory.load(0, {
+            code(Op::Set),  0, 5,
+            code(Op::Set),  1, 0,
+            code(Op::Add),  1, 0,     // adresse 6
+            code(Op::Dec),  0, 0,
+            code(Op::Jnz),  0, 6,
+            code(Op::Halt), 0, 0});
+        Cpu cpu;
+        const Status st = run(cpu, memory);
+        check(st == Status::Halted, "boucle : arret normal");
+        check(cpu.registers[1] == 15, "boucle : la somme vaut 15");
+        check(cpu.registers[0] == 0, "boucle : le compteur vaut 0");
+        check(cpu.instructions_executed == 18, "boucle : 18 instructions executees");
+    }
+    {   // boucle infinie : le garde-fou s'arrete
+        Memory memory(64);
+        memory.load(0, {code(Op::Jmp), 0, 0});   // saute vers lui-meme
+        Cpu cpu;
+        const Status st = run(cpu, memory, 100);
+        check(st == Status::StepLimit, "boucle infinie : StepLimit");
+        check(cpu.instructions_executed == 100, "boucle infinie : 100 instructions executees");
+    }
+
     // --- Load et Store : le CPU lit et ecrit la memoire ---
 
     {   // Store ecrit le registre en memoire, en big-endian
