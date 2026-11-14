@@ -8,6 +8,9 @@
 #include <vector>
 
 #include "nerith/memory/memory.h"
+#include "nerith/ppc/assembler.h"
+#include "nerith/ppc/cpu.h"
+#include "nerith/ppc/disassembler.h"
 #include "nerith/toy/assembler.h"
 #include "nerith/toy/cpu.h"
 #include "nerith/toy/disassembler.h"
@@ -72,24 +75,124 @@ nerith::Status run_with_trace(nerith::Cpu& cpu, nerith::Memory& memory, std::siz
     return nerith::Status::StepLimit;
 }
 
+// --- Mode PowerPC (option --ppc) ---
+
+// Programme utilise quand on lance "nerith --ppc" sans fichier.
+const char* const kPpcDemoProgram =
+    "; somme de 3 + 2 + 1\n"
+    "        li r3, 3        # compteur\n"
+    "        li r4, 0        # somme\n"
+    "loop:   add r4, r4, r3\n"
+    "        addi r3, r3, -1\n"
+    "        cmpwi r3, 0\n"
+    "        bne loop        # tant que r3 != 0, on recommence\n"
+    "        blr             # lr vaut 0 : fin du programme\n";
+
+const char* ppc_status_text(nerith::ppc::Status status) {
+    switch (status) {
+        case nerith::ppc::Status::Running:            return "toujours en cours";
+        case nerith::ppc::Status::Halted:             return "arret normal";
+        case nerith::ppc::Status::InvalidInstruction: return "instruction invalide";
+        case nerith::ppc::Status::OutOfBounds:        return "acces hors limites";
+        case nerith::ppc::Status::StepLimit:          return "trop d'instructions (boucle infinie ?)";
+    }
+    return "inconnu";
+}
+
+// Affiche les registres qui ne valent pas 0, plus lr et cr.
+void print_ppc_registers(const nerith::ppc::Cpu& cpu) {
+    for (std::size_t i = 0; i < cpu.gpr.size(); i++) {
+        if (cpu.gpr[i] != 0) {
+            std::cout << "r" << i << "=" << cpu.gpr[i] << " ";
+        }
+    }
+    std::cout << "lr=" << cpu.lr << " cr=0x" << std::hex << std::setw(8) << std::setfill('0')
+              << cpu.cr << std::dec << std::setfill(' ');
+}
+
+int run_ppc(const char* path, bool trace) {
+    try {
+        const std::string source = (path != nullptr) ? nerith::read_text_file(path) : kPpcDemoProgram;
+        const std::vector<std::uint32_t> words = nerith::ppc::assemble(source);
+        nerith::log_info("assemblage PowerPC reussi : " + std::to_string(words.size()) + " instructions");
+
+        nerith::Memory memory(4096);
+        for (std::size_t i = 0; i < words.size(); i++) {
+            memory.write32(i * 4, words[i]);
+        }
+
+        std::cout << "Programme PowerPC :\n" << nerith::ppc::disassemble_range(memory, 0, words.size())
+                  << "\n";
+
+        nerith::ppc::Cpu cpu;
+        nerith::ppc::Status status = nerith::ppc::Status::StepLimit;
+        std::size_t executed = 0;
+        const std::size_t max_steps = 1000;
+        if (trace) {
+            std::cout << "Trace d'execution :\n";
+        }
+        while (executed < max_steps) {
+            std::string line;
+            if (trace) {
+                try {
+                    line = nerith::ppc::disassemble_range(memory, static_cast<std::size_t>(cpu.pc), 1);
+                    line.pop_back();   // enleve le retour a la ligne
+                } catch (const std::out_of_range&) {
+                    line = "(hors memoire)";
+                }
+            }
+            status = nerith::ppc::step(cpu, memory);
+            ++executed;
+            if (trace) {
+                std::cout << line << " | ";
+                print_ppc_registers(cpu);
+                std::cout << "\n";
+            }
+            if (status != nerith::ppc::Status::Running) {
+                break;
+            }
+            if (executed == max_steps) {
+                status = nerith::ppc::Status::StepLimit;
+            }
+        }
+
+        std::cout << (trace ? "\n" : "") << "Fin : " << ppc_status_text(status) << "\n";
+        print_ppc_registers(cpu);
+        std::cout << "\npc = " << cpu.pc << "\ninstructions executees = " << executed << "\n";
+        return status == nerith::ppc::Status::Halted ? 0 : 1;
+    } catch (const nerith::ppc::AssemblyError& error) {
+        nerith::log_error(std::string("Erreur d'assemblage PowerPC, ") + error.what());
+    } catch (const std::exception& error) {
+        nerith::log_error(std::string("Erreur : ") + error.what());
+    }
+    return 1;
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
-    // arguments : [--trace] [--verbose] [programme.asm]
+    // arguments : [--ppc] [--trace] [--verbose] [programme]
     bool trace = false;
+    bool ppc = false;
     const char* path = nullptr;
     for (int i = 1; i < argc; i++) {
         const std::string argument = argv[i];
         if (argument == "--trace" && !trace) {
             trace = true;
+        } else if (argument == "--ppc") {
+            ppc = true;
         } else if (argument == "--verbose") {
             nerith::set_log_level(nerith::LogLevel::Debug);
         } else if (path == nullptr && argument.rfind("--", 0) != 0) {
             path = argv[i];
         } else {
-            std::cerr << "Usage : nerith [--trace] [--verbose] [programme.asm]\n";
+            std::cerr << "Usage : nerith [--ppc] [--trace] [--verbose] [programme]\n";
             return 2;
         }
+    }
+
+    if (ppc) {
+        return run_ppc(path, trace);
     }
 
     try {
