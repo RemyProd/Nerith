@@ -185,6 +185,12 @@ bool conditional_info(const std::string& mnemonic, std::uint32_t& bo, std::uint3
     return false;
 }
 
+// rlwinm rA, rS, SH, MB, ME
+std::uint32_t rlwinm_word(std::uint32_t ra, std::uint32_t rs, std::uint32_t sh, std::uint32_t mb,
+                          std::uint32_t me) {
+    return (21u << 26) | (rs << 21) | (ra << 16) | (sh << 11) | (mb << 6) | (me << 1);
+}
+
 std::uint32_t encode(const Line& line, const std::map<std::string, std::size_t>& labels) {
     const std::string& m = line.mnemonic;
     const auto& op = line.operands;
@@ -223,6 +229,24 @@ std::uint32_t encode(const Line& line, const std::map<std::string, std::size_t>&
         expect_operands(line, 3);
         return 0x7C0001D6u | (parse_register(line, op[0]) << 21) | (parse_register(line, op[1]) << 16) |
                (parse_register(line, op[2]) << 11);
+    }
+    if (m == "rlwinm") {   // rlwinm rA, rS, SH, MB, ME
+        expect_operands(line, 5);
+        return rlwinm_word(parse_register(line, op[0]), parse_register(line, op[1]),
+                           static_cast<std::uint32_t>(parse_value(line, op[2], 0, 31)),
+                           static_cast<std::uint32_t>(parse_value(line, op[3], 0, 31)),
+                           static_cast<std::uint32_t>(parse_value(line, op[4], 0, 31)));
+    }
+    if (m == "slwi" || m == "srwi" || m == "clrlwi" || m == "clrrwi" || m == "rotlwi") {
+        expect_operands(line, 3);
+        const std::uint32_t ra = parse_register(line, op[0]);
+        const std::uint32_t rs = parse_register(line, op[1]);
+        const std::uint32_t n = static_cast<std::uint32_t>(parse_value(line, op[2], 0, 31));
+        if (m == "slwi")   return rlwinm_word(ra, rs, n, 0, 31 - n);
+        if (m == "srwi")   return rlwinm_word(ra, rs, (32 - n) & 31u, n, 31);
+        if (m == "clrlwi") return rlwinm_word(ra, rs, 0, n, 31);
+        if (m == "clrrwi") return rlwinm_word(ra, rs, 0, 0, 31 - n);
+        return rlwinm_word(ra, rs, n, 0, 31);   // rotlwi
     }
     if (m == "or") {   // or rA, rS, rB
         expect_operands(line, 3);

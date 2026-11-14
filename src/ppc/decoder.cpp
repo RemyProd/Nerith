@@ -52,6 +52,17 @@ Instruction decode(std::uint32_t word) {
             }
             break;
 
+        case 21:   // rlwinm : seulement la forme Rc = 0 ; rd est rS, ra est la destination
+            if ((word & 0x1) == 0) {
+                result.kind = Kind::Rlwinm;
+                result.rd = field_6_10(word);
+                result.ra = field_11_15(word);
+                result.sh = field_16_20(word);
+                result.mb = static_cast<std::uint8_t>((word >> 6) & 0x1F);
+                result.me = static_cast<std::uint8_t>((word >> 1) & 0x1F);
+            }
+            break;
+
         case 15:   // addis (et lis)
             result.kind = Kind::Addis;
             result.rd = field_6_10(word);
@@ -191,6 +202,25 @@ std::string to_text(const Instruction& i) {
 
         case Kind::Mullw:
             return "mullw " + reg_name(i.rd) + ", " + reg_name(i.ra) + ", " + reg_name(i.rb);
+
+        case Kind::Rlwinm: {
+            // formes courantes, dans le meme ordre de priorite que llvm ; sinon la forme generale
+            const std::string a = reg_name(i.ra) + ", " + reg_name(i.rd) + ", ";
+            if (i.sh == 0 && i.me == 31 && i.mb > 0) {
+                return "clrlwi " + a + std::to_string(i.mb);
+            }
+            if (i.mb == 0 && i.me == 31 - i.sh) {
+                return "slwi " + a + std::to_string(i.sh);
+            }
+            if (i.me == 31 && i.mb > 0 && i.sh == 32 - i.mb) {
+                return "srwi " + a + std::to_string(i.mb);
+            }
+            if (i.mb == 0 && i.me == 31) {
+                return "rotlwi " + a + std::to_string(i.sh);
+            }
+            return "rlwinm " + a + std::to_string(i.sh) + ", " + std::to_string(i.mb) + ", " +
+                   std::to_string(i.me);
+        }
 
         case Kind::Or:   // rd est le champ rS, ra la destination
             if (i.rd == i.rb) {

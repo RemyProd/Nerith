@@ -13,6 +13,7 @@ enum class Kind {
     Add,       // add rD, rA, rB
     Sub,       // sub rD, rA, rB      (rD = rA - rB ; dans le mot, les champs rA et rB sont inverses)
     Mullw,     // mullw rD, rA, rB    (multiplication avec signe des 32 bits de poids faible)
+    Rlwinm,    // rlwinm rA, rS, SH, MB, ME (rotation de 32 bits puis masque ; slwi, srwi, clrlwi...)
     Or,        // or rA, rS, rB       ("mr rA, rS" quand rS et rB sont identiques)
     Cmpw,      // cmpw crfD, rA, rB   (compare deux registres, resultat dans un champ de CR)
     Ori,       // ori rA, rS, UIMM    (nop = ori 0, 0, 0)
@@ -40,6 +41,9 @@ struct Instruction {
     std::int32_t imm = 0;     // valeur immediate (avec signe) ou deplacement du saut, en octets
     bool absolute = false;    // B : bit AA (adresse absolue au lieu de relative)
     bool link = false;        // B : bit LK (sauvegarde l'adresse de retour dans LR)
+    std::uint8_t sh = 0;      // Rlwinm : rotation a gauche (0 a 31)
+    std::uint8_t mb = 0;      // Rlwinm : debut du masque (bit 0 = poids fort des 32 bits)
+    std::uint8_t me = 0;      // Rlwinm : fin du masque
     std::uint8_t crf = 0;     // Cmpwi : numero du champ de CR (0 a 7)
     std::uint8_t bo = 0;      // Bc : 12 = saute si le bit est a 1, 4 = saute si le bit est a 0
     std::uint8_t bi = 0;      // Bc : numero du bit de CR teste (0 a 31 ; champ = bi / 4)

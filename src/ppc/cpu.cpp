@@ -30,6 +30,14 @@ std::int32_t low32(std::uint64_t value) {
     return static_cast<std::int32_t>(static_cast<std::uint32_t>(value));
 }
 
+// Masque de 64 bits avec des 1 du bit b au bit e (le bit 0 est le bit de poids FORT, comme dans les manuels).
+// Si b > e, le masque "fait le tour" : des 1 de b a 63 et de 0 a e.
+std::uint64_t mask64(unsigned b, unsigned e) {
+    const std::uint64_t from_b = ~std::uint64_t{0} >> b;
+    const std::uint64_t to_e = ~std::uint64_t{0} << (63 - e);
+    return b <= e ? (from_b & to_e) : (from_b | to_e);
+}
+
 }  // namespace
 
 Status step(Cpu& cpu, Memory& memory) {
@@ -80,6 +88,18 @@ Status step(Cpu& cpu, Memory& memory) {
                                              static_cast<std::int64_t>(low32(cpu.gpr[i.rb]));
                 cpu.gpr[i.rd] = static_cast<std::uint64_t>(
                     static_cast<std::int64_t>(low32(static_cast<std::uint64_t>(product))));
+                cpu.pc = next;
+                return Status::Running;
+            }
+
+            case Kind::Rlwinm: {
+                // d'apres le manuel : on rotate les 32 bits de poids faible de rS (dupliques sur 64 bits),
+                // puis on garde les bits du masque MB..ME (numerotes dans les 32 bits de poids faible)
+                const std::uint64_t low = cpu.gpr[i.rd] & 0xFFFFFFFFull;
+                const std::uint64_t doubled = (low << 32) | low;
+                const unsigned n = i.sh;
+                const std::uint64_t rotated = n == 0 ? doubled : ((doubled << n) | (doubled >> (64 - n)));
+                cpu.gpr[i.ra] = rotated & mask64(i.mb + 32u, i.me + 32u);
                 cpu.pc = next;
                 return Status::Running;
             }

@@ -80,6 +80,37 @@ int main() {
     check(one("stwu r1, -16(r1)") == 0x9421FFF0, "stwu");
     check(one("stwu r1, -32(r1)") == 0x9421FFE0, "stwu -32");
 
+    // rotation et masque (mots verifies avec llvm-mc)
+    check(one("rlwinm r3, r4, 5, 6, 7") == 0x5483298E, "rlwinm");
+    check(one("rlwinm r3, r4, 0, 28, 3") == 0x54830706, "rlwinm avec masque qui fait le tour");
+    check(one("slwi r3, r4, 8") == 0x5483402E, "slwi");
+    check(one("srwi r3, r4, 8") == 0x5483C23E, "srwi");
+    check(one("srwi r3, r4, 0") == 0x5483003E, "srwi 0");
+    check(one("clrlwi r3, r4, 16") == 0x5483043E, "clrlwi");
+    check(one("clrrwi r3, r4, 4") == 0x54830036, "clrrwi");
+    check(one("rotlwi r3, r4, 8") == 0x5483403E, "rotlwi");
+    check(fails_at("slwi r3, r4, 32\n", 1), "slwi : decalage trop grand");
+    check(fails_at("rlwinm r3, r4, 1, 2\n", 1), "rlwinm : operande manquante");
+
+    {   // decoder un mot avec un programme PowerPC (examples/bits_ppc.s)
+        const std::vector<std::uint32_t> words = ppc::assemble(
+            "lis r3, 0x3860\n"
+            "ori r3, r3, 5\n"
+            "srwi r4, r3, 26\n"
+            "rlwinm r5, r3, 11, 27, 31\n"
+            "rlwinm r6, r3, 16, 27, 31\n"
+            "clrlwi r7, r3, 16\n"
+            "blr\n");
+        Memory memory(64);
+        for (std::size_t i = 0; i < words.size(); i++) {
+            memory.write32(i * 4, words[i]);
+        }
+        ppc::Cpu cpu;
+        check(ppc::run(cpu, memory, 100) == ppc::Status::Halted, "champs : se termine");
+        check(cpu.gpr[4] == 14 && cpu.gpr[5] == 3 && cpu.gpr[6] == 0 && cpu.gpr[7] == 5,
+              "champs de 0x38600005 : opcode 14, rD 3, rA 0, d 5");
+    }
+
     // majuscules, hexadecimal, commentaires
     check(one("LI R3, 0x10 ; commentaire") == 0x38600010, "majuscules, hexa, commentaire");
     check(one("li r3, 5 # autre commentaire") == 0x38600005, "commentaire avec #");

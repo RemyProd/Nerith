@@ -81,6 +81,21 @@ int main() {
     check(text(0x9421FFF0) == "stwu r1, -16(r1)", "stwu");
     check(decode(0x7C0902A6).kind == Kind::Unknown, "mfspr d'un autre registre (CTR) pas encore gere");
 
+    // rotation et masque (mots verifies avec llvm-mc)
+    check(text(0x5483298E) == "rlwinm r3, r4, 5, 6, 7", "rlwinm general");
+    check(text(0x54830706) == "rlwinm r3, r4, 0, 28, 3", "rlwinm avec masque qui fait le tour");
+    check(text(0x5483402E) == "slwi r3, r4, 8", "slwi");
+    check(text(0x5483C23E) == "srwi r3, r4, 8", "srwi");
+    check(text(0x5483043E) == "clrlwi r3, r4, 16", "clrlwi");
+    check(text(0x5483403E) == "rotlwi r3, r4, 8", "rotlwi");
+    check(text(0x54830036) == "rlwinm r3, r4, 0, 0, 27", "clrrwi s'affiche en rlwinm (comme llvm)");
+    {
+        const Instruction r = decode(0x5483298E);
+        check(r.kind == Kind::Rlwinm && r.rd == 4 && r.ra == 3 && r.sh == 5 && r.mb == 6 && r.me == 7,
+              "rlwinm : champs (rS = 4, rA = 3)");
+    }
+    check(decode(0x5483402F).kind == Kind::Unknown, "rlwinm. (Rc = 1) pas encore gere");
+
     // mots non reconnus : jamais d'exception
     check(decode(0x00000000).kind == Kind::Unknown, "0 : inconnu");
     check(text(0x12345678) == ".long 0x12345678", "texte : inconnu");

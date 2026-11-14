@@ -256,6 +256,39 @@ int main() {
         Cpu c2;
         check(step(c2, memory) == Status::InvalidInstruction, "stwu avec rA = 0 : invalide");
     }
+    {   // rlwinm et ses formes courantes, sur r4 = 0x12345678 (resultat dans r3)
+        struct Case { std::uint32_t word; std::uint64_t expected; const char* name; };
+        const Case cases[] = {
+            {0x5483402E, 0x34567800ull, "slwi r3, r4, 8"},
+            {0x5483C23E, 0x00123456ull, "srwi r3, r4, 8"},
+            {0x5483043E, 0x00005678ull, "clrlwi r3, r4, 16"},
+            {0x54830036, 0x12345670ull, "clrrwi r3, r4, 4"},
+            {0x5483403E, 0x34567812ull, "rotlwi r3, r4, 8"},
+        };
+        for (const Case& c : cases) {
+            Memory memory(8);
+            memory.write32(0, c.word);
+            Cpu cpu;
+            cpu.gpr[4] = 0x12345678;
+            step(cpu, memory);
+            check(cpu.gpr[3] == c.expected, c.name);
+        }
+        // seuls les 32 bits de poids faible de rS comptent
+        Memory memory(8);
+        memory.write32(0, 0x5483C23E);   // srwi r3, r4, 8
+        Cpu cpu;
+        cpu.gpr[4] = 0xAAAAAAAA12345678ull;
+        step(cpu, memory);
+        check(cpu.gpr[3] == 0x00123456ull, "srwi : les 32 bits du haut de rS sont ignores");
+        // masque qui fait le tour (MB > ME) : d'apres le manuel, il garde aussi des bits dans les 32 bits du haut.
+        // Resultat calcule a la main : (0x1234567812345678 & 0xFFFFFFFFF000000F) = 0x1234567810000008
+        Memory m2(8);
+        m2.write32(0, 0x54830706);   // rlwinm r3, r4, 0, 28, 3
+        Cpu c2;
+        c2.gpr[4] = 0x12345678;
+        step(c2, m2);
+        check(c2.gpr[3] == 0x1234567810000008ull, "rlwinm : masque qui fait le tour (selon le manuel)");
+    }
     {   // erreurs : rien ne change
         Memory memory(8);
         memory.write32(0, 0x12345678);
