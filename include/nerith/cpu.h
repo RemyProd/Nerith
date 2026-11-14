@@ -5,6 +5,8 @@
 #include <cstdint>
 #include <vector>
 
+#include "nerith/memory.h"
+
 namespace nerith {
 
 // Instructions du CPU pedagogique. Chaque instruction fait 3 octets :
@@ -28,14 +30,16 @@ constexpr std::uint8_t code(Op op) {
 enum class Status {
     Halted,               // le programme s'est termine avec Halt
     InvalidInstruction,   // opcode inconnu
-    OutOfBounds           // registre inexistant, ou lecture apres la fin du programme
+    OutOfBounds           // registre inexistant, ou lecture hors de la memoire
 };
 
 struct Cpu {
     std::array<std::uint32_t, 4> registers{};
+    std::size_t pc = 0;   // program counter : adresse de la prochaine instruction
 };
 
-// Execute le programme depuis le debut jusqu'a Halt ou jusqu'a une erreur.
-Status run(Cpu& cpu, const std::vector<std::uint8_t>& program);
+// Execute les instructions lues en memoire, a partir de cpu.pc,
+// jusqu'a Halt ou jusqu'a une erreur. Le CPU ne modifie pas la memoire.
+Status run(Cpu& cpu, const Memory& memory);
 
 }  // namespace nerith

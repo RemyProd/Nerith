@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "nerith/cpu.h"
+#include "nerith/memory.h"
 
 int main() {
     using nerith::code;
@@ -17,8 +18,12 @@ int main() {
         code(Op::Halt), 0, 0
     };
 
+    // le programme est charge en memoire, a l'adresse 0
+    nerith::Memory memory(64);
+    memory.load(0, program);
+
     nerith::Cpu cpu;
-    const nerith::Status status = nerith::run(cpu, program);
+    const nerith::Status status = nerith::run(cpu, memory);
 
     if (status != nerith::Status::Halted) {
         std::cerr << "Erreur d'execution\n";
