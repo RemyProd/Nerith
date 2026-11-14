@@ -75,6 +75,12 @@ int main() {
     check(decode(0x7C652051).kind == Kind::Unknown, "sub. (Rc = 1) pas encore gere");
     check(decode(0x7C200000).kind == Kind::Unknown, "cmpd (64 bits) pas encore gere");
 
+    // pile et lr (mots verifies avec llvm-mc)
+    check(text(0x7C0802A6) == "mflr r0", "mflr");
+    check(text(0x7D8803A6) == "mtlr r12", "mtlr");
+    check(text(0x9421FFF0) == "stwu r1, -16(r1)", "stwu");
+    check(decode(0x7C0902A6).kind == Kind::Unknown, "mfspr d'un autre registre (CTR) pas encore gere");
+
     // mots non reconnus : jamais d'exception
     check(decode(0x00000000).kind == Kind::Unknown, "0 : inconnu");
     check(text(0x12345678) == ".long 0x12345678", "texte : inconnu");

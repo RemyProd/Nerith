@@ -256,12 +256,16 @@ std::uint32_t encode(const Line& line, const std::map<std::string, std::size_t>&
         expect_operands(line, 0);
         return 0x60000000u;
     }
-    if (m == "lwz" || m == "stw" || m == "lbz" || m == "stb") {
+    if (m == "mflr" || m == "mtlr") {
+        expect_operands(line, 1);
+        return (m == "mflr" ? 0x7C0802A6u : 0x7C0803A6u) | (parse_register(line, op[0]) << 21);
+    }
+    if (m == "lwz" || m == "stw" || m == "lbz" || m == "stb" || m == "stwu") {
         expect_operands(line, 2);
         long long offset = 0;
         std::uint32_t base = 0;
         parse_memory_operand(line, op[1], offset, base);
-        const std::uint32_t opcode = m == "lwz" ? 32u : (m == "stw" ? 36u : (m == "lbz" ? 34u : 38u));
+        const std::uint32_t opcode = m == "lwz" ? 32u : (m == "stw" ? 36u : (m == "lbz" ? 34u : (m == "stb" ? 38u : 37u)));
         return (opcode << 26) | (parse_register(line, op[0]) << 21) | (base << 16) |
                (static_cast<std::uint32_t>(offset) & 0xFFFFu);
     }

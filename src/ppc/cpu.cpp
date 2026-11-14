@@ -89,6 +89,28 @@ Status step(Cpu& cpu, Memory& memory) {
                 cpu.pc = next;
                 return Status::Running;
 
+            case Kind::Stwu: {
+                if (i.ra == 0) {
+                    break;   // forme invalide : rA ne peut pas etre 0
+                }
+                const std::uint64_t address = add_signed(cpu.gpr[i.ra], i.imm);
+                // on ecrit d'abord : si ca echoue, rA n'a pas change
+                memory.write32(static_cast<std::size_t>(address), static_cast<std::uint32_t>(cpu.gpr[i.rd]));
+                cpu.gpr[i.ra] = address;
+                cpu.pc = next;
+                return Status::Running;
+            }
+
+            case Kind::Mflr:
+                cpu.gpr[i.rd] = cpu.lr;
+                cpu.pc = next;
+                return Status::Running;
+
+            case Kind::Mtlr:
+                cpu.lr = cpu.gpr[i.rd];
+                cpu.pc = next;
+                return Status::Running;
+
             case Kind::Lbz: {
                 const std::uint64_t address = add_signed(base_value(cpu, i.ra), i.imm);
                 const std::uint8_t value = memory.read8(static_cast<std::size_t>(address));

@@ -223,6 +223,39 @@ int main() {
         cpu.gpr[3] = 5;
         check(step(cpu, memory) == Status::OutOfBounds && cpu.gpr[3] == 5, "lbz hors memoire");
     }
+    {   // mflr, mtlr
+        Memory memory(16);
+        load_words(memory, {
+            0x7C0802A6,   // mflr r0
+            0x7D8803A6}); // mtlr r12
+        Cpu cpu;
+        cpu.lr = 1234;
+        cpu.gpr[12] = 99;
+        step(cpu, memory);
+        check(cpu.gpr[0] == 1234, "mflr : r0 = lr");
+        step(cpu, memory);
+        check(cpu.lr == 99, "mtlr : lr = r12");
+    }
+    {   // stwu : ecrit puis met a jour rA (la pile descend)
+        Memory memory(64);
+        memory.write32(0, 0x9421FFF0);   // stwu r1, -16(r1)
+        Cpu cpu;
+        cpu.gpr[1] = 48;
+        // le mot ecrit est r1 lui-meme (rS = 1) : l'ancienne valeur, 48
+        step(cpu, memory);
+        check(cpu.gpr[1] == 32, "stwu : r1 = r1 - 16");
+        check(memory.read32(32) == 48, "stwu : ecrit l'ancienne valeur a la nouvelle adresse");
+    }
+    {   // stwu hors memoire : r1 ne change pas ; stwu avec rA = 0 : invalide
+        Memory memory(16);
+        memory.write32(0, 0x9421FFF0);   // stwu r1, -16(r1)
+        Cpu cpu;
+        cpu.gpr[1] = 8;                  // 8 - 16 : hors de la memoire
+        check(step(cpu, memory) == Status::OutOfBounds && cpu.gpr[1] == 8, "stwu hors memoire : r1 inchange");
+        memory.write32(0, 0x94200000);   // stwu r1, 0(r0) : rA = 0 interdit
+        Cpu c2;
+        check(step(c2, memory) == Status::InvalidInstruction, "stwu avec rA = 0 : invalide");
+    }
     {   // erreurs : rien ne change
         Memory memory(8);
         memory.write32(0, 0x12345678);

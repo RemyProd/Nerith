@@ -75,6 +75,11 @@ int main() {
     check(ppc::to_text(ppc::decode(one("mr r31, r0"))) == "mr r31, r0", "aller-retour mr");
     check(fails_at("sub r3, r4\n", 1), "sub : operande manquante");
 
+    check(one("mflr r0") == 0x7C0802A6, "mflr");
+    check(one("mtlr r12") == 0x7D8803A6, "mtlr");
+    check(one("stwu r1, -16(r1)") == 0x9421FFF0, "stwu");
+    check(one("stwu r1, -32(r1)") == 0x9421FFE0, "stwu -32");
+
     // majuscules, hexadecimal, commentaires
     check(one("LI R3, 0x10 ; commentaire") == 0x38600010, "majuscules, hexa, commentaire");
     check(one("li r3, 5 # autre commentaire") == 0x38600005, "commentaire avec #");
@@ -109,6 +114,40 @@ int main() {
             "        li r3, 9\n"
             "        blr\n");
         check(words.at(0) == 0x48000009, "bl vers l'avant : +8");
+    }
+
+    {   // factorielle recursive : appels, pile, lr
+        const std::vector<std::uint32_t> words = ppc::assemble(
+            "main:   mflr r12\n"
+            "        li r1, 0x800\n"
+            "        li r3, 5\n"
+            "        bl fact\n"
+            "        mtlr r12\n"
+            "        blr\n"
+            "fact:   cmpwi r3, 1\n"
+            "        ble base\n"
+            "        mflr r0\n"
+            "        stwu r1, -16(r1)\n"
+            "        stw r0, 20(r1)\n"
+            "        stw r3, 8(r1)\n"
+            "        addi r3, r3, -1\n"
+            "        bl fact\n"
+            "        lwz r4, 8(r1)\n"
+            "        mullw r3, r3, r4\n"
+            "        lwz r0, 20(r1)\n"
+            "        addi r1, r1, 16\n"
+            "        mtlr r0\n"
+            "        blr\n"
+            "base:   li r3, 1\n"
+            "        blr\n");
+        Memory memory(4096);
+        for (std::size_t i = 0; i < words.size(); i++) {
+            memory.write32(i * 4, words[i]);
+        }
+        ppc::Cpu cpu;
+        check(ppc::run(cpu, memory, 1000) == ppc::Status::Halted, "recursion : se termine");
+        check(cpu.gpr[3] == 120, "recursion : fact(5) = 120");
+        check(cpu.gpr[1] == 0x800, "recursion : la pile est revenue a sa place");
     }
 
     // le decodeur relit ce que l'assembleur a ecrit

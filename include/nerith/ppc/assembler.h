@@ -28,6 +28,7 @@ private:
 //   ori r3, r4, 0x10    nop                   lis r3, 0x8200      addis r3, r4, 1
 //   sub r3, r4, r5      (r3 = r4 - r5)        mullw r3, r4, r5    mr r3, r4     or r3, r4, r5
 //   cmpw r3, r4         cmpw cr1, r3, r4
+//   mflr r0             mtlr r0               stwu r1, -16(r1)    (pile : r1 = r1 - 16, puis ecrit)
 //   lwz r3, 8(r1)       stw r3, 8(r1)         lbz r3, 8(r1)       stb r3, 8(r1)
 //   (r0 entre parentheses = base 0)
 //   cmpwi r3, 0         cmpwi cr1, r3, 0

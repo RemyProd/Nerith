@@ -59,6 +59,13 @@ Instruction decode(std::uint32_t word) {
             result.imm = simm16(word);
             break;
 
+        case 37:   // stwu
+            result.kind = Kind::Stwu;
+            result.rd = field_6_10(word);
+            result.ra = field_11_15(word);
+            result.imm = simm16(word);
+            break;
+
         case 34:   // lbz
             result.kind = Kind::Lbz;
             result.rd = field_6_10(word);
@@ -129,6 +136,18 @@ Instruction decode(std::uint32_t word) {
                     case 40:  result.kind = Kind::Sub;   break;
                     case 235: result.kind = Kind::Mullw; break;
                     case 444: result.kind = Kind::Or;    break;
+                    case 339:   // mfspr : seulement LR (numero 8)
+                    case 467:   // mtspr : seulement LR
+                        {
+                            const std::uint32_t field = (word >> 11) & 0x3FF;   // moities inversees
+                            const std::uint32_t spr = ((field & 0x1F) << 5) | (field >> 5);
+                            if (spr == 8) {
+                                result.kind = ((word >> 1) & 0x3FF) == 339 ? Kind::Mflr : Kind::Mtlr;
+                                result.ra = 0;
+                                result.rb = 0;
+                            }
+                        }
+                        break;
                     case 0:   // cmpw : seulement la forme 32 bits (L = 0)
                         if (((word >> 21) & 0x1) == 0) {
                             result.kind = Kind::Cmpw;
@@ -185,6 +204,15 @@ std::string to_text(const Instruction& i) {
             }
             return "cmpw cr" + std::to_string(static_cast<int>(i.crf)) + ", " + reg_name(i.ra) + ", " +
                    reg_name(i.rb);
+
+        case Kind::Stwu:
+            return "stwu " + reg_name(i.rd) + ", " + std::to_string(i.imm) + "(" + reg_name(i.ra) + ")";
+
+        case Kind::Mflr:
+            return "mflr " + reg_name(i.rd);
+
+        case Kind::Mtlr:
+            return "mtlr " + reg_name(i.rd);
 
         case Kind::Lbz:
             return "lbz " + reg_name(i.rd) + ", " + std::to_string(i.imm) + "(" + reg_name(i.ra) + ")";
