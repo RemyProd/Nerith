@@ -41,6 +41,23 @@ Status step(Cpu& cpu, Memory& memory) {
                 cpu.pc = next;
                 return Status::Running;
 
+            case Kind::Cmpwi: {
+                // comparaison avec signe sur les 32 bits de poids faible de rA
+                const std::int32_t a = static_cast<std::int32_t>(static_cast<std::uint32_t>(cpu.gpr[i.ra]));
+                const std::uint32_t bits = a < i.imm ? 8u : (a > i.imm ? 4u : 2u);
+                const unsigned shift = 4u * (7u - i.crf);
+                cpu.cr = (cpu.cr & ~(0xFu << shift)) | (bits << shift);
+                cpu.pc = next;
+                return Status::Running;
+            }
+
+            case Kind::Bc: {
+                const bool bit = ((cpu.cr >> (31u - i.bi)) & 1u) != 0;
+                const bool taken = (i.bo == 12) ? bit : !bit;
+                cpu.pc = taken ? add_signed(cpu.pc, i.imm) : next;
+                return Status::Running;
+            }
+
             case Kind::Lwz: {
                 const std::uint64_t address = add_signed(base_value(cpu, i.ra), i.imm);
                 // on lit d'abord : si ca echoue, rien n'a change

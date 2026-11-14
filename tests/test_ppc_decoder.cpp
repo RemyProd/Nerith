@@ -52,6 +52,15 @@ int main() {
     check(text(0x48000009) == "bl +8", "bl");
     check(text(0x4E800020) == "blr", "blr");
 
+    // comparaison et sauts conditionnels
+    check(text(0x2C030000) == "cmpwi r3, 0", "cmpwi cr0");
+    check(text(0x2C8300FF) == "cmpwi cr1, r3, 255", "cmpwi cr1");
+    check(text(0x4182000C) == "beq +12", "beq");
+    check(text(0x4082FFF8) == "bne -8", "bne");
+    check(text(0x4180FFFC) == "blt -4", "blt");
+    check(text(0x40850008) == "ble cr1, +8", "ble cr1");
+    check(decode(0x2C230000).kind == Kind::Unknown, "cmpdi (64 bits) pas encore gere");
+
     // mots non reconnus : jamais d'exception
     check(decode(0x00000000).kind == Kind::Unknown, "0 : inconnu");
     check(text(0x12345678) == ".long 0x12345678", "texte : inconnu");

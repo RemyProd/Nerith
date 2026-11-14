@@ -13,7 +13,11 @@ struct Cpu {
     std::array<std::uint64_t, 32> gpr{};   // r0 a r31, 64 bits chacun
     std::uint64_t pc = 0;                  // adresse de la prochaine instruction
     std::uint64_t lr = 0;                  // registre de lien : adresse de retour (bl, blr)
+    std::uint32_t cr = 0;                  // registre de conditions : 8 champs de 4 bits (LT, GT, EQ, SO)
 };
+
+// Dans CR, le champ n (0 a 7) occupe 4 bits ; le champ 0 est tout a gauche (bits de poids fort).
+// Dans un champ : LT = 8, GT = 4, EQ = 2, SO = 1. Exemple : "egal dans le champ 0" donne cr = 0x20000000.
 
 // Ce qui s'est passe pendant l'execution.
 enum class Status {

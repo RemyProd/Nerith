@@ -99,6 +99,42 @@ int main() {
         Cpu cpu;
         check(run(cpu, memory, 50) == Status::StepLimit, "boucle infinie : StepLimit");
     }
+    {   // boucle : r3 = 3, r4 = 0 ; tant que r3 != 0 : r4 += r3, r3 -= 1  (somme 3+2+1 = 6)
+        Memory memory(64);
+        // adresse : instruction
+        load_words(memory, {
+            0x38600003,   // 00 li r3, 3
+            0x38800000,   // 04 li r4, 0
+            0x7C841A14,   // 08 add r4, r4, r3
+            0x3863FFFF,   // 0C addi r3, r3, -1
+            0x2C030000,   // 10 cmpwi r3, 0
+            0x4082FFF4,   // 14 bne -12  (retour a l'adresse 08)
+            0x4E800020}); // 18 blr
+        Cpu cpu;
+        check(run(cpu, memory, 100) == Status::Halted, "boucle : se termine");
+        check(cpu.gpr[4] == 6, "boucle : 3 + 2 + 1 = 6");
+        check(cpu.gpr[3] == 0, "boucle : r3 arrive a 0");
+        check(cpu.cr == 0x20000000, "cmpwi : CR0 = egal");
+    }
+    {   // cmpwi : plus petit, plus grand, champ 1, comparaison avec signe
+        Memory memory(16);
+        memory.write32(0, 0x2C030005);   // cmpwi r3, 5
+        Cpu cpu;
+        cpu.gpr[3] = 2;
+        step(cpu, memory);
+        check(cpu.cr == 0x80000000, "cmpwi : plus petit (LT)");
+        cpu.pc = 0;
+        cpu.gpr[3] = 9;
+        step(cpu, memory);
+        check(cpu.cr == 0x40000000, "cmpwi : plus grand (GT)");
+        cpu.pc = 0;
+        cpu.gpr[3] = 0xFFFFFFFF;   // -1 en 32 bits avec signe
+        step(cpu, memory);
+        check(cpu.cr == 0x80000000, "cmpwi : -1 est plus petit que 5 (avec signe)");
+        memory.write32(4, 0x2C830005);   // cmpwi cr1, r3, 5
+        step(cpu, memory);
+        check(cpu.cr == 0x88000000, "cmpwi cr1 : n'ecrase pas le champ 0");
+    }
     {   // erreurs : rien ne change
         Memory memory(8);
         memory.write32(0, 0x12345678);
