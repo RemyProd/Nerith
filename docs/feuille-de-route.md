@@ -50,11 +50,11 @@ Voir [Architecture](architecture.md).
 - [x] Documentation des décisions. ([decisions.md](decisions.md))
 
 ## Phase 4 — CPU Xbox 360
-- [ ] Étudier PowerPC/Xenon.
+- [x] Étudier PowerPC/Xenon.
 - [ ] Étudier registres et modes d'exécution.
 - [ ] Étudier les instructions nécessaires.
-- [ ] Concevoir un interpréteur de référence.
-- [ ] Tester chaque instruction.
+- [ ] Concevoir un interpréteur de référence. (commencé : module `ppc`, D-013)
+- [ ] Tester chaque instruction. (fait pour les instructions déjà gérées)
 - [ ] Étudier les extensions vectorielles.
 - [ ] Évaluer ultérieurement un JIT.
 

@@ -2,7 +2,7 @@
 
 Projet de recherche et de développement d'un émulateur Xbox 360 indépendant pour PC (Windows), écrit en C++.
 
-> **Statut : phase 1 en cours (apprentissage du C++). Un CPU pédagogique (11 instructions, sauts, mémoire vérifiée) avec assembleur, désassembleur et tests automatiques est fonctionnel. Ce n'est pas encore un émulateur : il n'émule pas encore la Xbox 360 et ne lance aucun jeu.**
+> **Statut : phase 4 commencée. Un CPU pédagogique (11 instructions) et un tout début d'interpréteur PowerPC (une vingtaine d'instructions : arithmétique, mémoire, sauts, appels de fonction avec pile) avec assembleur, désassembleur et tests automatiques sont fonctionnels. Ce n'est pas encore un émulateur : il ne lit aucun exécutable Xbox 360 et ne lance aucun jeu.**
 
 *Nerith est un nom de travail provisoire : il peut changer avant la première version publique.*
 
@@ -77,6 +77,13 @@ Avec `--trace`, il affiche chaque instruction exécutée et l'état des registre
 .\build\Debug\nerith.exe --trace examples\somme.asm
 ```
 
+Pour lancer un programme PowerPC écrit en texte (option `--ppc`, qui se combine avec `--trace`) :
+
+```powershell
+.\build\Debug\nerith.exe --ppc --trace examples\somme_ppc.s
+.\build\Debug\nerith.exe --ppc examples\factorielle_recursive_ppc.s
+```
+
 Avec `--verbose`, il affiche aussi des messages de diagnostic (lecture du fichier, assemblage, fin de l'exécution). Les deux options se combinent. Sans argument, `nerith.exe` exécute un programme de démonstration. Le dossier `build/` est ignoré par Git. Pour l'instant, le programme assemble un programme écrit en texte, par exemple une boucle qui additionne 5 + 4 + 3 + 2 + 1, l'affiche en clair, l'exécute sur un CPU pédagogique à 4 registres et affiche le résultat. Ça sert d'exercice avant le vrai CPU PowerPC.
 
 ## Structure du dépôt
@@ -86,9 +93,10 @@ include/nerith/   en-têtes publics, un sous-dossier par module :
                     util/    fichiers, logs
                     memory/  mémoire de l'émulateur
                     toy/     CPU pédagogique, assembleur, désassembleur
+                    ppc/     CPU PowerPC : décodeur, désassembleur, assembleur, interpréteur
 src/              code des modules (même découpage) et programme principal (main.cpp)
 tests/            tests automatiques
-examples/         programmes d'exemple pour le CPU pédagogique (.asm)
+examples/         programmes d'exemple : .asm (CPU pédagogique) et .s (PowerPC)
 docs/             documentation du projet
 ```
 

@@ -13,13 +13,14 @@ Conserver les décisions importantes et leur justification. Ne pas effacer une a
 | D-003 | Build | Retenue | CMake |
 | D-004 | Dépôt | Retenue | GitHub public |
 | D-005 | Nom | Provisoire | Nerith (remplace Project Xenon) |
-| D-006 | Architecture | En cours | Modules indépendants ; premier découpage en D-012 |
+| D-006 | Architecture | En cours | Modules indépendants ; découpage en D-012 et D-013 |
 | D-007 | Kernel cible | À étudier | Architecture multi-version ; le dernier kernel ne garantit pas tous les jeux |
 | D-008 | API graphique | À étudier | Décider après recherche et prototype |
 | D-009 | Licence | Provisoire | BSD-3-Clause (copyright : RemyProd) |
 | D-010 | Conventions de code | Retenue | Conventions écrites (`docs/conventions.md`) et `.editorconfig`, sans formateur automatique |
 | D-011 | Logs | Retenue | Petit module maison (`nerith/util/log.h`), sans dépendance |
 | D-012 | Organisation du code | Retenue | Modules `util`, `memory`, `toy` : un sous-dossier et une bibliothèque CMake chacun |
+| D-013 | Module PowerPC | Retenue | Module `ppc` (décodeur, désassembleur, assembleur, interpréteur) dans `nerith::ppc`, qui dépend de `memory` |
 
 ## Décisions détaillées
 
@@ -79,6 +80,17 @@ Conserver les décisions importantes et leur justification. Ne pas effacer une a
 - **Décision :** option B. Modules `util` (fichiers, logs), `memory` (`Memory`), `toy` (CPU pédagogique, assembleur, désassembleur). Dépendances : `toy` → `memory` ; `util` et `memory` ne dépendent de rien. Le namespace reste `nerith`.
 - **Justification :** les dépendances sont déclarées dans CMake et vérifiées à la compilation ; `Memory` est clairement partagée ; le déplacement est mécanique et les 6 séries de tests vérifient qu'il n'a rien cassé.
 - **Conséquences :** en-têtes inclus avec leur module (`nerith/memory/memory.h`) ; un test n'est lié qu'au module qu'il vérifie ; le futur module `ppc` s'ajoutera à côté de `toy`. L'option C sera reconsidérée quand deux modules auront des noms identiques.
+
+
+### D-013 — Module `ppc` et namespace `nerith::ppc`
+- **Date :** 2026-11-14
+- **État :** retenue, révisable
+- **Contexte :** le CPU pédagogique (`toy`) et le futur CPU PowerPC ont des noms identiques (`Cpu`, `step`, `run`, `Status`, `AssemblyError`, `disassemble_range`). D-012 prévoyait de passer à un namespace par module à ce moment-là.
+- **Options étudiées :** (A) tout dans `nerith` et préfixer les noms (`PpcCpu`...) ; (B) un namespace pour `ppc` seulement ; (C) un namespace par module, y compris `toy`.
+- **Décision :** option B. Nouveau module `ppc` (décodeur, désassembleur, assembleur, interpréteur), dépendant de `memory`, dans le namespace `nerith::ppc`. `toy` reste dans `nerith` pour ne rien casser.
+- **Règles de départ :** un mot inconnu ou une forme pas encore gérée (`Rc = 1`, `OE = 1`, 64 bits...) donne `Unknown` / `InvalidInstruction`, jamais une exécution approximative ; une instruction qui échoue ne modifie rien ; `blr` avec `lr == 0` termine le programme (convention de test, pas le comportement de la console) ; `rA = 0` vaut le nombre 0 dans `addi`, `addis`, `lwz`, `stw`, `lbz`, `stb`.
+- **Vérification :** les encodages sont comparés à `llvm-mc` (assembleur LLVM) pendant le développement ; `llvm-mc` n'est pas une dépendance du dépôt. Le comportement (et pas seulement l'encodage) reste à vérifier avec le manuel PowerPC.
+- **Conséquences :** le test de chaque instruction se fait à trois niveaux (décodage, assemblage, exécution) ; `toy` pourra passer dans `nerith::toy` plus tard ; D-006 reste « en cours ».
 
 ## Format d'une décision
 

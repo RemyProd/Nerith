@@ -58,7 +58,7 @@ Expérience utilisateur. Ce module ne doit pas contenir le cœur de l'émulation
 
 ## Organisation actuelle du code
 
-Le code existant est rangé en trois modules. Chaque module est une bibliothèque CMake distincte, ce qui force à déclarer les dépendances.
+Le code existant est rangé en quatre modules. Chaque module est une bibliothèque CMake distincte, ce qui force à déclarer les dépendances.
 
 ```text
 include/nerith/<module>/   en-têtes du module
@@ -70,16 +70,17 @@ src/<module>/              code du module
 | `util` | Lecture de fichiers (`file.h`), logs (`log.h`) | rien |
 | `memory` | Classe `Memory` : octets, big-endian, accès vérifiés | rien |
 | `toy` | CPU pédagogique (`cpu.h`), assembleur, désassembleur | `memory` |
+| `ppc` | CPU PowerPC : décodeur, désassembleur, assembleur, interpréteur (`nerith::ppc`) | `memory` |
 
-L'exécutable `nerith` (`src/main.cpp`) utilise `toy` et `util`. Chaque test n'est lié qu'au module qu'il vérifie.
+L'exécutable `nerith` (`src/main.cpp`) utilise `toy`, `ppc` et `util` (option `--ppc` pour le PowerPC). Chaque test n'est lié qu'au module qu'il vérifie.
 
 Règles :
 - Un module ne dépend que des modules plus bas dans le tableau. Pas de dépendance circulaire.
 - On inclut un en-tête avec son module : `#include "nerith/memory/memory.h"`.
-- `Memory` est partagée : le futur module `ppc` (processeur PowerPC) l'utilisera aussi, sans passer par `toy`.
-- Le namespace reste `nerith` pour tous les modules. On passera à un namespace par module (`nerith::toy`, `nerith::ppc`) quand deux modules auront des noms identiques (par exemple deux fonctions `step`).
+- `Memory` est partagée : `toy` et `ppc` l'utilisent, sans dépendre l'un de l'autre.
+- Le namespace reste `nerith` pour tous les modules. `ppc` est dans `nerith::ppc`, car ses noms (`Cpu`, `step`, `run`...) sont les mêmes que ceux de `toy` ; `toy` pourra passer dans `nerith::toy` plus tard.
 
-Décision : D-012 dans [Décisions techniques](decisions.md).
+Décisions : D-012 et D-013 dans [Décisions techniques](decisions.md).
 
 ## Arborescence cible du dépôt
 
@@ -90,7 +91,7 @@ Nerith/
 ├── docs/
 ├── include/
 │   └── nerith/
-│       ├── cpu/        (futur CPU PowerPC ; le CPU pédagogique est dans toy/)
+│       ├── cpu/        (futur ; pour l'instant le CPU PowerPC est dans ppc/ et le CPU pédagogique dans toy/)
 │       ├── memory/
 │       ├── gpu/
 │       ├── audio/
