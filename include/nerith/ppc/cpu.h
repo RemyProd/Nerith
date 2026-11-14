@@ -20,6 +20,15 @@ struct Cpu {
     bool reserved = false;                 // une reservation existe (posee par lwarx ou ldarx, consommee par stwcx. ou stdcx.)
     std::uint64_t reserve_address = 0;     // adresse de cette reservation
     std::uint32_t xer = 0;                 // registre d'exception : SO = 0x80000000, OV = 0x40000000, CA (retenue) = 0x20000000
+
+    // Registres systeme (acces par mfmsr/mtmsr et mfspr/mtspr).
+    std::uint64_t msr = 0;                   // etat de la machine : interruptions, mode 32/64 bits... (on le garde, sans effet pour l'instant)
+    std::uint64_t srr0 = 0;                  // SPR 26 : adresse de retour d'interruption
+    std::uint64_t srr1 = 0;                  // SPR 27 : copie du MSR a l'interruption
+    std::array<std::uint64_t, 4> sprg{};     // SPR 272 a 275 : cases libres pour le systeme
+    std::uint32_t dec = 0;                   // SPR 22 : decompteur, diminue de 1 par instruction executee
+    std::uint32_t pvr = 0;                   // SPR 287 : version du processeur, lecture seule (valeur du vrai Xenon a verifier)
+    std::uint64_t tb = 0;                    // base de temps (mftb) : augmente de 1 par instruction executee
 };
 
 // Dans CR, le champ n (0 a 7) occupe 4 bits ; le champ 0 est tout a gauche (bits de poids fort).

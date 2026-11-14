@@ -380,8 +380,8 @@ Instruction decode(std::uint32_t word) {
                     case 151: result.kind = Kind::Stwx;  break;
                     case 87:  result.kind = Kind::Lbzx;  break;
                     case 215: result.kind = Kind::Stbx;  break;
-                    case 339:   // mfspr : seulement LR (numero 8) et CTR (numero 9)
-                    case 467:   // mtspr : seulement LR et CTR
+                    case 339:   // mfspr
+                    case 467:   // mtspr
                         {
                             const std::uint32_t field = (word >> 11) & 0x3FF;   // moities inversees
                             const std::uint32_t spr = ((field & 0x1F) << 5) | (field >> 5);
@@ -392,9 +392,63 @@ Instruction decode(std::uint32_t word) {
                                 result.kind = read ? Kind::Mflr : Kind::Mtlr;
                             } else if (spr == 9) {
                                 result.kind = read ? Kind::Mfctr : Kind::Mtctr;
+                            } else if (spr == 22 || spr == 26 || spr == 27 || (spr >= 272 && spr <= 275)) {
+                                result.kind = read ? Kind::Mfspr : Kind::Mtspr;   // DEC, SRR0, SRR1, SPRG0 a SPRG3
+                                result.imm = static_cast<std::int32_t>(spr);
+                            } else if (read && (spr == 268 || spr == 269 || spr == 287)) {
+                                result.kind = Kind::Mfspr;   // base de temps et PVR : lecture seule
+                                result.imm = static_cast<std::int32_t>(spr);
                             }
                             result.ra = 0;
                             result.rb = 0;
+                        }
+                        break;
+                    case 371:   // mftb : base de temps (268) ou sa moitie haute (269)
+                        {
+                            const std::uint32_t field = (word >> 11) & 0x3FF;
+                            const std::uint32_t spr = ((field & 0x1F) << 5) | (field >> 5);
+                            if (spr == 268 || spr == 269) {
+                                result.kind = Kind::Mftb;
+                                result.imm = static_cast<std::int32_t>(spr);
+                            }
+                            result.ra = 0;
+                            result.rb = 0;
+                        }
+                        break;
+                    case 83:    // mfmsr : les champs rA et rB doivent etre a 0
+                        if (result.ra == 0 && result.rb == 0) {
+                            result.kind = Kind::Mfmsr;
+                        }
+                        break;
+                    case 146:   // mtmsr (L dans le bit de poids faible du champ rA)
+                    case 178:   // mtmsrd
+                        if ((result.ra & 0x1E) == 0 && result.rb == 0) {
+                            result.kind = ((word >> 1) & 0x3FF) == 146 ? Kind::Mtmsr : Kind::Mtmsrd;
+                            result.imm = result.ra;   // L : 1 = ne changer que les bits EE et RI
+                            result.ra = 0;
+                        }
+                        break;
+                    case 278:   // dcbt, et les autres instructions de cache : le champ rD doit etre a 0
+                    case 246:   // dcbtst
+                    case 54:    // dcbst
+                    case 86:    // dcbf
+                    case 982:   // icbi
+                        if (result.rd == 0) {
+                            switch ((word >> 1) & 0x3FF) {
+                                case 278: result.kind = Kind::Dcbt;   break;
+                                case 246: result.kind = Kind::Dcbtst; break;
+                                case 54:  result.kind = Kind::Dcbst;  break;
+                                case 86:  result.kind = Kind::Dcbf;   break;
+                                default:  result.kind = Kind::Icbi;   break;
+                            }
+                        }
+                        break;
+                    case 1014:  // dcbz (rD = 0) ou dcbzl, alias dcbz128 (rD = 1)
+                        if (result.rd == 0) {
+                            result.kind = Kind::Dcbz;
+                        } else if (result.rd == 1) {
+                            result.kind = Kind::Dcbzl;
+                            result.rd = 0;
                         }
                         break;
                     case 826:   // sradi : l'opcode etendu a 9 bits vaut 413, et le bit 30 est le bit de poids fort de SH
@@ -566,6 +620,51 @@ std::string to_text(const Instruction& i) {
             return "mfxer " + reg_name(i.rd);
         case Kind::Mtxer:
             return "mtxer " + reg_name(i.rd);
+
+        case Kind::Dcbt:
+        case Kind::Dcbtst:
+        case Kind::Dcbst:
+        case Kind::Dcbf:
+        case Kind::Icbi:
+        case Kind::Dcbz:
+        case Kind::Dcbzl: {
+            const char* name = i.kind == Kind::Dcbt ? "dcbt" : (i.kind == Kind::Dcbtst ? "dcbtst" :
+                               (i.kind == Kind::Dcbst ? "dcbst" : (i.kind == Kind::Dcbf ? "dcbf" :
+                               (i.kind == Kind::Icbi ? "icbi" : (i.kind == Kind::Dcbz ? "dcbz" : "dcbzl")))));
+            return std::string(name) + " " + (i.ra == 0 ? std::string("0") : reg_name(i.ra)) + ", " + reg_name(i.rb);
+        }
+
+        case Kind::Mfmsr:
+            return "mfmsr " + reg_name(i.rd);
+        case Kind::Mtmsr:
+        case Kind::Mtmsrd: {
+            std::string out = (i.kind == Kind::Mtmsr ? "mtmsr " : "mtmsrd ") + reg_name(i.rd);
+            if (i.imm != 0) {
+                out += ", 1";
+            }
+            return out;
+        }
+
+        case Kind::Mfspr:   // les memes noms que llvm : mfdec, mfsrr0... sinon la forme generale
+            switch (i.imm) {
+                case 22:  return "mfdec " + reg_name(i.rd);
+                case 26:  return "mfsrr0 " + reg_name(i.rd);
+                case 27:  return "mfsrr1 " + reg_name(i.rd);
+                case 287: return "mfpvr " + reg_name(i.rd);
+                default:  return "mfspr " + reg_name(i.rd) + ", " + std::to_string(i.imm);
+            }
+        case Kind::Mtspr:   // attention : le numero du SPR s'ecrit en premier
+            switch (i.imm) {
+                case 22:  return "mtdec " + reg_name(i.rd);
+                case 26:  return "mtsrr0 " + reg_name(i.rd);
+                case 27:  return "mtsrr1 " + reg_name(i.rd);
+                default:  return "mtspr " + std::to_string(i.imm) + ", " + reg_name(i.rd);
+            }
+        case Kind::Mftb:
+            if (i.imm == 269) {
+                return "mftbu " + reg_name(i.rd);
+            }
+            return "mftb " + reg_name(i.rd) + ", " + std::to_string(i.imm);
 
         case Kind::Rlwimi:
             return "rlwimi " + reg_name(i.ra) + ", " + reg_name(i.rd) + ", " + std::to_string(i.sh) + ", " +

@@ -465,6 +465,58 @@ bool encode_extra(const Line& line, std::uint32_t& word) {
                (parse_index_base(line, op[1]) << 16) | (parse_register(line, op[2]) << 11);
         return true;
     }
+    if (m == "dcbt" || m == "dcbtst" || m == "dcbst" || m == "dcbf" || m == "icbi" ||
+        m == "dcbz" || m == "dcbzl" || m == "dcbz128") {   // dcbz128 : le nom Xenon de dcbzl
+        expect_operands(line, 2);
+        const std::uint32_t xo = m == "dcbt" ? 278u : (m == "dcbtst" ? 246u : (m == "dcbst" ? 54u :
+                                 (m == "dcbf" ? 86u : (m == "icbi" ? 982u : 1014u))));
+        const std::uint32_t rt = (m == "dcbzl" || m == "dcbz128") ? 1u : 0u;
+        word = (31u << 26) | (rt << 21) | (parse_index_base(line, op[0]) << 16) |
+               (parse_register(line, op[1]) << 11) | (xo << 1);
+        return true;
+    }
+    if (m == "mfmsr") {
+        expect_operands(line, 1);
+        word = (31u << 26) | (parse_register(line, op[0]) << 21) | (83u << 1);
+        return true;
+    }
+    if (m == "mtmsr" || m == "mtmsrd") {   // mtmsr rS ou mtmsr rS, L
+        if (op.size() != 1) {
+            expect_operands(line, 2);
+        }
+        const std::uint32_t l = op.size() == 2 ? static_cast<std::uint32_t>(parse_value(line, op[1], 0, 1)) : 0u;
+        word = (31u << 26) | (parse_register(line, op[0]) << 21) | (l << 16) |
+               ((m == "mtmsr" ? 146u : 178u) << 1);
+        return true;
+    }
+    if (m == "mfdec" || m == "mfsrr0" || m == "mfsrr1" || m == "mfpvr" ||
+        m == "mtdec" || m == "mtsrr0" || m == "mtsrr1") {
+        expect_operands(line, 1);
+        const std::uint32_t spr = (m == "mfdec" || m == "mtdec") ? 22u :
+                                  (m == "mfpvr" ? 287u : ((m == "mfsrr0" || m == "mtsrr0") ? 26u : 27u));
+        const std::uint32_t xo = m[1] == 'f' ? 339u : 467u;
+        word = (31u << 26) | (parse_register(line, op[0]) << 21) |
+               (((spr & 0x1Fu) << 5 | (spr >> 5)) << 11) | (xo << 1);
+        return true;
+    }
+    if (m == "mfspr" || m == "mtspr") {   // mfspr rD, numero / mtspr numero, rS
+        expect_operands(line, 2);
+        const bool read = m == "mfspr";
+        const std::uint32_t spr = static_cast<std::uint32_t>(parse_value(line, op[read ? 1 : 0], 0, 1023));
+        word = (31u << 26) | (parse_register(line, op[read ? 0 : 1]) << 21) |
+               (((spr & 0x1Fu) << 5 | (spr >> 5)) << 11) | ((read ? 339u : 467u) << 1);
+        return true;
+    }
+    if (m == "mftb" || m == "mftbu") {   // mftb rD ou mftb rD, numero
+        if (op.size() != 1) {
+            expect_operands(line, 2);
+        }
+        const std::uint32_t spr = op.size() == 2 ?
+            static_cast<std::uint32_t>(parse_value(line, op[1], 0, 1023)) : (m == "mftb" ? 268u : 269u);
+        word = (31u << 26) | (parse_register(line, op[0]) << 21) |
+               (((spr & 0x1Fu) << 5 | (spr >> 5)) << 11) | (371u << 1);
+        return true;
+    }
     if (m == "mfxer" || m == "mtxer") {
         expect_operands(line, 1);
         word = (m == "mfxer" ? 0x7C0102A6u : 0x7C0103A6u) | (parse_register(line, op[0]) << 21);

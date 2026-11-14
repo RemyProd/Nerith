@@ -662,7 +662,10 @@ bool execute_alu(const Instruction& i, Cpu& cpu) {
 
 }  // namespace
 
-Status step(Cpu& cpu, Memory& memory) {
+namespace {
+
+// Le corps de step : l'enveloppe en dessous fait avancer la base de temps.
+Status step_inner(Cpu& cpu, Memory& memory) {
     try {
         const Instruction i = decode(memory.read32(static_cast<std::size_t>(cpu.pc)));
         const std::uint64_t next = cpu.pc + 4;
@@ -946,6 +949,79 @@ Status step(Cpu& cpu, Memory& memory) {
             case Kind::Sync:
             case Kind::Eieio:
             case Kind::Isync:   // un seul coeur, memoire immediate : rien a faire
+            case Kind::Dcbt:
+            case Kind::Dcbtst:
+            case Kind::Dcbst:
+            case Kind::Dcbf:
+            case Kind::Icbi:    // pas de vrai cache non plus : ces indications ne font rien
+                cpu.pc = next;
+                return Status::Running;
+
+            case Kind::Dcbz:    // met a zero un bloc de 32 octets (dcbz) ou 128 (dcbzl), aligne sur sa taille
+            case Kind::Dcbzl: {
+                const std::uint64_t block = i.kind == Kind::Dcbz ? 32u : 128u;
+                const std::uint64_t start = (base_value(cpu, i.ra) + cpu.gpr[i.rb]) & ~(block - 1);
+                if (start + block > memory.size()) {   // tout ou rien : pas de bloc a moitie ecrit
+                    return Status::OutOfBounds;
+                }
+                for (std::uint64_t k = 0; k < block; ++k) {
+                    memory.write8(static_cast<std::size_t>(start + k), 0);
+                }
+                cpu.pc = next;
+                return Status::Running;
+            }
+
+            // --- registres systeme ---
+            case Kind::Mfmsr:
+                cpu.gpr[i.rd] = cpu.msr;
+                cpu.pc = next;
+                return Status::Running;
+
+            case Kind::Mtmsr:    // L = 0 : remplace les 32 bits de poids faible ; L = 1 : seulement EE et RI
+            case Kind::Mtmsrd: { // pareil, mais L = 0 remplace les 64 bits
+                const std::uint64_t value = cpu.gpr[i.rd];
+                if (i.imm != 0) {
+                    const std::uint64_t ee_ri = 0x8002;   // EE (interruptions externes) et RI (interruption recuperable)
+                    cpu.msr = (cpu.msr & ~ee_ri) | (value & ee_ri);
+                } else if (i.kind == Kind::Mtmsr) {
+                    cpu.msr = (cpu.msr & 0xFFFFFFFF00000000ull) | (value & 0xFFFFFFFFull);
+                } else {
+                    cpu.msr = value;
+                }
+                cpu.pc = next;
+                return Status::Running;
+            }
+
+            case Kind::Mfspr: {
+                std::uint64_t value = 0;
+                switch (i.imm) {
+                    case 22:  value = cpu.dec;  break;
+                    case 26:  value = cpu.srr0; break;
+                    case 27:  value = cpu.srr1; break;
+                    case 268: value = cpu.tb;   break;
+                    case 269: value = cpu.tb >> 32; break;
+                    case 287: value = cpu.pvr;  break;
+                    default:  value = cpu.sprg[i.imm - 272]; break;   // 272 a 275
+                }
+                cpu.gpr[i.rd] = value;
+                cpu.pc = next;
+                return Status::Running;
+            }
+
+            case Kind::Mtspr: {
+                const std::uint64_t value = cpu.gpr[i.rd];
+                switch (i.imm) {
+                    case 22:  cpu.dec = static_cast<std::uint32_t>(value);  break;
+                    case 26:  cpu.srr0 = value; break;
+                    case 27:  cpu.srr1 = value; break;
+                    default:  cpu.sprg[i.imm - 272] = value; break;
+                }
+                cpu.pc = next;
+                return Status::Running;
+            }
+
+            case Kind::Mftb:
+                cpu.gpr[i.rd] = i.imm == 269 ? (cpu.tb >> 32) : cpu.tb;
                 cpu.pc = next;
                 return Status::Running;
 
@@ -1047,6 +1123,17 @@ Status step(Cpu& cpu, Memory& memory) {
     } catch (const std::out_of_range&) {
         return Status::OutOfBounds;
     }
+}
+
+}  // namespace
+
+Status step(Cpu& cpu, Memory& memory) {
+    const Status status = step_inner(cpu, memory);
+    if (status != Status::InvalidInstruction && status != Status::OutOfBounds) {
+        cpu.tb += 1;    // notre horloge : un tic par instruction executee
+        cpu.dec -= 1;   // le decompteur descend au meme rythme (et reboucle a zero, pas d'interruption)
+    }
+    return status;
 }
 
 Status run(Cpu& cpu, Memory& memory, std::size_t max_steps) {

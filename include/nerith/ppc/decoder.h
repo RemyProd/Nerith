@@ -72,6 +72,15 @@ enum class Kind {
     Fmr, Fneg, Fabs, Fnabs, Frsp, Fctiw, Fctiwz, Fctid, Fctidz, Fcfid, Fcmpu, Fcmpo,
     // Registre d'etat des flottants (FPSCR)
     Mffs, Mtfsf, Mtfsb0, Mtfsb1, Mtfsfi, Mcrfs,
+
+    // caches (sans effet chez nous, sauf dcbz qui met a zero) et registres systeme
+    Dcbt, Dcbtst, Dcbst, Dcbf, Icbi,
+    Dcbz,    // met a zero un bloc de 32 octets
+    Dcbzl,   // variante 128 octets (dcbz128 sur Xenon)
+    Mfmsr, Mtmsr, Mtmsrd,
+    Mfspr,   // forme generale : imm = numero du SPR (SRR0/1, SPRG0-3, DEC, PVR, base de temps)
+    Mtspr,
+    Mftb,    // lecture de la base de temps (imm = 268) ou de sa moitie haute (269)
 };
 
 // Le resultat du decodage d'un mot de 32 bits.
