@@ -1,0 +1,44 @@
+# Builds et fichiers générés
+build/
+out/
+cmake-build-*/
+CMakeUserPresets.json
+CMakeCache.txt
+CMakeFiles/
+*.cmake
+!cmake/*.cmake
+
+# Visual Studio / VS Code
+.vs/
+*.user
+*.suo
+*.vcxproj.filters
+*.vcxproj.user
+.vscode/
+
+# Binaires et compilation
+*.exe
+*.dll
+*.obj
+*.o
+*.lib
+*.pdb
+*.ilk
+*.exp
+
+# Journaux et données locales
+*.log
+local/
+Nerith-Local/
+
+# Contenus propriétaires : ne jamais ajouter au dépôt
+*.iso
+*.xex
+*.xbla
+firmware/
+bios/
+keys/
+*.key
+*.bin
+roms/
+games/
