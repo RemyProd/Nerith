@@ -179,7 +179,7 @@ void test_time_base() {
     Cpu after = one("mfmsr r3", [](Cpu&) {}, memory2, &status);
     check_value(after.tb, 1, "tb : une instruction valide compte un tic");
     Memory memory3(0x400);
-    memory3.write32(kStart, 0xFFFFFFFFu);   // mot invalide
+    memory3.write32(kStart, 0x00000001u);   // mot invalide (opcode 0)
     Cpu bad;
     bad.pc = kStart;
     check(nerith::ppc::step(bad, memory3) == Status::InvalidInstruction, "mot invalide : refuse");

@@ -43,12 +43,17 @@ enum class Layout {
     CrfCrf,     // name crfD, crfS        (mcrfs)
 };
 
+// Options d'une ligne de la table : quelles variantes du mot existent.
+constexpr unsigned kRc = 1;   // le bit Rc (bit 31) peut valoir 1 : le nom prend un point ("and.") et CR0 (ou CR1 pour les flottants) est mis a jour
+constexpr unsigned kOe = 2;   // le bit OE (bit 21) peut valoir 1 : le nom prend un "o" ("addo") et XER.OV / XER.SO sont mis a jour
+
 struct OpInfo {
     Kind kind;
     const char* name;   // "mulli", "andi."...
     unsigned opcode;    // bits 0-5 du mot
     int xo;             // opcode 19, 31, 59 et 63 : champ XO (bits 21-30, ou 26-30 pour les formes "A" des flottants) ; opcode 58 et 62 : les 2 bits de poids faible ; sinon -1
     Layout layout;
+    unsigned flags = 0; // kRc, kOe (ou 0 : seule la forme Rc = 0 / OE = 0 existe)
 };
 
 // Toutes les lignes de la table.

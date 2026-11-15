@@ -483,6 +483,42 @@ bool execute_fp(const Instruction& i, Cpu& cpu) {
     }
 }
 
+// Les 64 bits de poids fort du produit de deux nombres de 64 bits SANS signe (sans __int128, que Visual Studio n'a pas).
+std::uint64_t mulh_unsigned64(std::uint64_t a, std::uint64_t b) {
+    const std::uint64_t a_lo = a & 0xFFFFFFFFu, a_hi = a >> 32;
+    const std::uint64_t b_lo = b & 0xFFFFFFFFu, b_hi = b >> 32;
+    const std::uint64_t p0 = a_lo * b_lo;
+    const std::uint64_t p1 = a_lo * b_hi;
+    const std::uint64_t p2 = a_hi * b_lo;
+    const std::uint64_t p3 = a_hi * b_hi;
+    const std::uint64_t carry = ((p0 >> 32) + (p1 & 0xFFFFFFFFu) + (p2 & 0xFFFFFFFFu)) >> 32;
+    return p3 + (p1 >> 32) + (p2 >> 32) + carry;
+}
+
+// Pareil AVEC signe : on part du resultat sans signe, puis on retire b si a est negatif, et a si b est negatif.
+std::uint64_t mulh_signed64(std::uint64_t a, std::uint64_t b) {
+    std::uint64_t high = mulh_unsigned64(a, b);
+    if (static_cast<std::int64_t>(a) < 0) {
+        high -= b;
+    }
+    if (static_cast<std::int64_t>(b) < 0) {
+        high -= a;
+    }
+    return high;
+}
+
+// Vrai si le produit de deux nombres de 64 bits avec signe ne tient pas sur 64 bits.
+bool multiply_overflows64(std::int64_t x, std::int64_t y) {
+    if (x == 0 || y == 0) {
+        return false;
+    }
+    if (x == INT64_MIN && y == -1) {   // le seul cas ou la division de controle ci-dessous planterait
+        return true;
+    }
+    const std::int64_t product = static_cast<std::int64_t>(static_cast<std::uint64_t>(x) * static_cast<std::uint64_t>(y));
+    return product / y != x;
+}
+
 // Les calculs de la table (logique, decalages, multiplications, rotations, comparaisons sans signe).
 // Renvoie false si l'instruction n'en fait pas partie. Ne touche pas a pc.
 bool execute_alu(const Instruction& i, Cpu& cpu) {
@@ -569,6 +605,8 @@ bool execute_alu(const Instruction& i, Cpu& cpu) {
         case Kind::Mulhwu:
             g[i.rd] = (static_cast<std::uint64_t>(low32u(a)) * low32u(b)) >> 32;
             return true;
+        case Kind::Mulhd:  g[i.rd] = mulh_signed64(a, b); return true;
+        case Kind::Mulhdu: g[i.rd] = mulh_unsigned64(a, b); return true;
         case Kind::Divw: {   // division par 0 ou INT_MIN / -1 : le manuel dit "indefini", Nerith met 0
             const std::int32_t x = static_cast<std::int32_t>(low32u(a));
             const std::int32_t y = static_cast<std::int32_t>(low32u(b));
@@ -648,6 +686,8 @@ bool execute_alu(const Instruction& i, Cpu& cpu) {
             g[i.ra] = rotl32_doubled(s, static_cast<unsigned>(b & 0x1F)) & mask64(i.mb + 32u, i.me + 32u);
             return true;
         case Kind::Rldicl: g[i.ra] = rotl64(s, i.sh) & mask64(i.mb, 63); return true;
+        case Kind::Rldcl:  g[i.ra] = rotl64(s, static_cast<unsigned>(b & 0x3F)) & mask64(i.mb, 63); return true;
+        case Kind::Rldcr:  g[i.ra] = rotl64(s, static_cast<unsigned>(b & 0x3F)) & mask64(0, i.me); return true;
         case Kind::Rldicr: g[i.ra] = rotl64(s, i.sh) & mask64(0, i.me); return true;
         case Kind::Rldic:  g[i.ra] = rotl64(s, i.sh) & mask64(i.mb, 63u - i.sh); return true;
         case Kind::Rldimi: {
@@ -664,10 +704,9 @@ bool execute_alu(const Instruction& i, Cpu& cpu) {
 
 namespace {
 
-// Le corps de step : l'enveloppe en dessous fait avancer la base de temps.
-Status step_inner(Cpu& cpu, Memory& memory) {
+// Execute une instruction DEJA decodee (sans s'occuper de Rc ni de OE : step_inner s'en charge ensuite).
+Status execute_decoded(const Instruction& i, Cpu& cpu, Memory& memory) {
     try {
-        const Instruction i = decode(memory.read32(static_cast<std::size_t>(cpu.pc)));
         const std::uint64_t next = cpu.pc + 4;
 
         MemOp mem{};
@@ -1123,6 +1162,94 @@ Status step_inner(Cpu& cpu, Memory& memory) {
     } catch (const std::out_of_range&) {
         return Status::OutOfBounds;
     }
+}
+
+// --- bits Rc et OE ---
+
+constexpr std::uint32_t kXerOv = 0x40000000u;   // OV : overflow de la derniere instruction avec OE = 1
+
+// Vrai si l'addition x + y + retenue (r est le resultat) deborde, vue comme une addition AVEC signe de 64 bits.
+bool add_overflows(std::uint64_t x, std::uint64_t y, std::uint64_t r) {
+    return (((x ^ r) & (y ^ r)) >> 63) != 0;
+}
+
+// Y a-t-il overflow pour une instruction avec OE = 1 ? A calculer AVANT l'execution
+// (rD peut etre le meme registre que rA ou rB, et serait ecrase).
+bool overflow_of(const Instruction& i, const Cpu& cpu) {
+    const std::uint64_t a = cpu.gpr[i.ra];
+    const std::uint64_t b = cpu.gpr[i.rb];
+    const std::uint64_t ca = (cpu.xer & kXerCa) != 0 ? 1u : 0u;
+    const std::uint64_t ones = ~std::uint64_t{0};
+    switch (i.kind) {
+        case Kind::Add:
+        case Kind::Addc:   return add_overflows(a, b, a + b);
+        case Kind::Adde:   return add_overflows(a, b, a + b + ca);
+        case Kind::Addze:  return add_overflows(a, 0, a + ca);
+        case Kind::Addme:  return add_overflows(a, ones, a + ones + ca);
+        case Kind::Sub:    // rB - rA = ~rA + rB + 1
+        case Kind::Subfc:  return add_overflows(~a, b, ~a + b + 1);
+        case Kind::Subfe:  return add_overflows(~a, b, ~a + b + ca);
+        case Kind::Subfze: return add_overflows(~a, 0, ~a + ca);
+        case Kind::Subfme: return add_overflows(~a, ones, ~a + ones + ca);
+        case Kind::Neg:    return a == 0x8000000000000000ull;
+        case Kind::Mullw: {
+            const std::int64_t product = static_cast<std::int64_t>(low32(a)) * static_cast<std::int64_t>(low32(b));
+            return product != static_cast<std::int64_t>(static_cast<std::int32_t>(product));
+        }
+        case Kind::Mulld:  return multiply_overflows64(static_cast<std::int64_t>(a), static_cast<std::int64_t>(b));
+        case Kind::Divw:   return low32(b) == 0 || (low32(a) == INT32_MIN && low32(b) == -1);
+        case Kind::Divwu:  return low32u(b) == 0;
+        case Kind::Divd:   return b == 0 || (static_cast<std::int64_t>(a) == INT64_MIN && static_cast<std::int64_t>(b) == -1);
+        case Kind::Divdu:  return b == 0;
+        default:           return false;
+    }
+}
+
+// Quel registre entier recoit le resultat (pour le test de Rc) ? -1 si l'instruction n'est pas entiere.
+int result_register(const Instruction& i) {
+    switch (i.kind) {
+        case Kind::Add: case Kind::Sub: case Kind::Mullw: case Kind::Mulhw: case Kind::Mulhwu: case Kind::Mulhd:
+        case Kind::Mulhdu: case Kind::Mulld: case Kind::Divw: case Kind::Divwu: case Kind::Divd: case Kind::Divdu:
+        case Kind::Neg: case Kind::Addc: case Kind::Adde: case Kind::Subfc: case Kind::Subfe: case Kind::Addze:
+        case Kind::Addme: case Kind::Subfze: case Kind::Subfme:
+            return i.rd;   // ces instructions ecrivent dans rD
+        case Kind::Or: case Kind::And: case Kind::Andc: case Kind::Xor: case Kind::Nor: case Kind::Nand:
+        case Kind::Orc: case Kind::Eqv: case Kind::Slw: case Kind::Srw: case Kind::Sld: case Kind::Srd:
+        case Kind::Sraw: case Kind::Srawi: case Kind::Srad: case Kind::Sradi: case Kind::Cntlzw: case Kind::Cntlzd:
+        case Kind::Extsb: case Kind::Extsh: case Kind::Extsw: case Kind::Rlwinm: case Kind::Rlwimi:
+        case Kind::Rlwnm: case Kind::Rldicl: case Kind::Rldicr: case Kind::Rldic: case Kind::Rldimi:
+        case Kind::Rldcl: case Kind::Rldcr:
+            return i.ra;   // ... celles-ci dans rA
+        default:
+            return -1;
+    }
+}
+
+// Decode, execute, puis applique OE (XER) et Rc (CR0, ou CR1 pour les flottants).
+Status step_inner(Cpu& cpu, Memory& memory) {
+    Instruction i;
+    try {
+        i = decode(memory.read32(static_cast<std::size_t>(cpu.pc)));
+    } catch (const std::out_of_range&) {
+        return Status::OutOfBounds;
+    }
+    const bool overflow = i.oe && overflow_of(i, cpu);
+    const Status status = execute_decoded(i, cpu, memory);
+    if (status != Status::Running) {
+        return status;
+    }
+    if (i.oe) {   // OV prend la valeur du dernier calcul ; SO est "collant" : il reste a 1 une fois pose
+        cpu.xer = overflow ? (cpu.xer | kXerOv | kXerSo) : (cpu.xer & ~kXerOv);
+    }
+    if (i.rc) {
+        const int target = result_register(i);
+        if (target >= 0) {   // entiers : CR0 = comparaison du resultat (64 bits, avec signe) a 0
+            set_cr_field(cpu, 0, static_cast<std::int64_t>(cpu.gpr[target]), 0);
+        } else {             // flottants : CR1 recoit les 4 bits de poids fort de FPSCR (FX, FEX, VX, OX)
+            cpu.cr = (cpu.cr & ~0x0F000000u) | ((cpu.fpscr >> 28) << 24);
+        }
+    }
+    return status;
 }
 
 }  // namespace

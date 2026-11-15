@@ -546,6 +546,20 @@ bool encode_extra(const Line& line, std::uint32_t& word) {
                         static_cast<std::uint32_t>(parse_value(line, op[3], 0, 63)));
         return true;
     }
+    if (m == "subf" || m == "subfc") {   // dans l'ordre du mot : subf rD, rA, rB = rB - rA (sub rD, rB, rA)
+        expect_operands(line, 3);
+        word = (31u << 26) | ((m == "subf" ? 40u : 8u) << 1) | (parse_register(line, op[0]) << 21) |
+               (parse_register(line, op[1]) << 16) | (parse_register(line, op[2]) << 11);
+        return true;
+    }
+    if (m == "rldcl" || m == "rldcr" || m == "rotld") {   // rldcl rA, rS, rB, MB ; rldcr rA, rS, rB, ME ; rotld rA, rS, rB
+        expect_operands(line, m == "rotld" ? 3 : 4);
+        const std::uint32_t mask_bit = m == "rotld" ? 0u : static_cast<std::uint32_t>(parse_value(line, op[3], 0, 63));
+        const std::uint32_t raw = ((mask_bit & 0x1Fu) << 1) | (mask_bit >> 5);
+        word = (30u << 26) | (parse_register(line, op[1]) << 21) | (parse_register(line, op[0]) << 16) |
+               (parse_register(line, op[2]) << 11) | (raw << 5) | ((m == "rldcr" ? 9u : 8u) << 1);
+        return true;
+    }
     if (m == "sldi" || m == "srdi" || m == "clrldi" || m == "rotldi" || m == "clrrdi") {
         expect_operands(line, 3);
         const std::uint32_t ra = parse_register(line, op[0]);
@@ -662,7 +676,14 @@ bool encode_conditional_branch(const Line& line, const std::map<std::string, std
     return true;
 }
 
-std::uint32_t encode(const Line& line, const std::map<std::string, std::size_t>& labels) {
+// Mnemonique inconnu : permet a encode() d'essayer ensuite les formes avec "." (Rc) et "o" (OE).
+class UnknownInstruction : public AssemblyError {
+public:
+    UnknownInstruction(std::size_t line, const std::string& name)
+        : AssemblyError(line, "instruction inconnue : " + name) {}
+};
+
+std::uint32_t encode_base(const Line& line, const std::map<std::string, std::size_t>& labels) {
     const std::string& m = line.mnemonic;
     const auto& op = line.operands;
 
@@ -835,7 +856,51 @@ std::uint32_t encode(const Line& line, const std::map<std::string, std::size_t>&
     if (encode_extra(line, word)) {
         return word;
     }
-    throw AssemblyError(line.number, "instruction inconnue : " + m);
+    throw UnknownInstruction(line.number, m);
+}
+
+// Encode une ligne. Si le mnemonique est inconnu, essaie la forme avec point (Rc = 1) et/ou "o" (OE = 1) :
+// "add." = add + bit 31, "addo" = add + bit 21, "addo." = les deux. Le decodeur dit si cette variante existe.
+std::uint32_t encode(const Line& line, const std::map<std::string, std::size_t>& labels) {
+    try {
+        return encode_base(line, labels);
+    } catch (const UnknownInstruction&) {
+        // on continue ci-dessous
+    }
+    std::string stem = line.mnemonic;
+    const bool rc = stem.size() > 1 && stem.back() == '.';
+    if (rc) {
+        stem.pop_back();
+    }
+    for (const bool oe : {false, true}) {
+        if (!rc && !oe) {
+            continue;   // sans point ni "o", il n'y a rien d'autre a essayer
+        }
+        std::string name = stem;
+        if (oe) {
+            if (name.size() < 2 || name.back() != 'o') {
+                continue;
+            }
+            name.pop_back();
+        }
+        Line base = line;
+        base.mnemonic = name;
+        std::uint32_t word = 0;
+        try {
+            word = encode_base(base, labels);
+        } catch (const UnknownInstruction&) {
+            continue;
+        }
+        word |= (rc ? 1u : 0u) | (oe ? 0x400u : 0u);
+        const Instruction decoded = decode(word);
+        if (decoded.kind == Kind::Unknown || decoded.rc != rc || decoded.oe != oe) {
+            throw AssemblyError(line.number, "\"" + name + "\" n'existe pas avec " +
+                                             std::string(oe ? "le suffixe o" : "") + (oe && rc ? " et " : "") +
+                                             std::string(rc ? "le point" : "") + " : " + line.mnemonic);
+        }
+        return word;
+    }
+    throw UnknownInstruction(line.number, line.mnemonic);
 }
 
 }  // namespace

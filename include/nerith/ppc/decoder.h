@@ -81,6 +81,9 @@ enum class Kind {
     Mfspr,   // forme generale : imm = numero du SPR (SRR0/1, SPRG0-3, DEC, PVR, base de temps)
     Mtspr,
     Mftb,    // lecture de la base de temps (imm = 268) ou de sa moitie haute (269)
+
+    // multiplications hautes 64 bits et rotations 64 bits dont la rotation vient d'un registre
+    Mulhd, Mulhdu, Rldcl, Rldcr,
 };
 
 // Le resultat du decodage d'un mot de 32 bits.
@@ -102,6 +105,8 @@ struct Instruction {
     std::uint8_t bo = 0;      // Bc, Bclr, Bcctr : les 5 bits BO (16 = pas de test de CR, 8 = valeur du bit attendue,
                               //                     4 = pas de decrement de CTR, 2 = saute si CTR vaut 0)
     std::uint8_t bi = 0;      // Bc... : numero du bit de CR teste (0 a 31 ; champ = bi / 4) ; Mcrf : champ source
+    bool rc = false;          // bit Rc (bit 31) : le resultat met a jour CR0 (entiers) ou CR1 (flottants) ; le nom prend un "."
+    bool oe = false;          // bit OE (bit 21) : l'overflow met a jour XER.OV et XER.SO ; le nom prend un "o"
 };
 
 // Decode un mot de 32 bits (deja lu en big-endian, par exemple avec Memory::read32).

@@ -2,7 +2,7 @@
 
 Projet de recherche et de développement d'un émulateur Xbox 360 indépendant pour PC (Windows), écrit en C++.
 
-> **Statut : phase 4 commencée. Un CPU pédagogique (11 instructions) et un début d'interpréteur PowerPC (environ 200 formes d'instructions : arithmétique entière avec retenue, logique, décalages, rotations, comparaisons, mémoire de 8 à 64 bits, registre de conditions, sauts conditionnels complets, verrous atomiques, nombres à virgule flottante, instructions de cache et registres système (MSR, base de temps), appels de fonction avec pile) avec assembleur, désassembleur et tests automatiques sont fonctionnels. Ce n'est pas encore un émulateur : il ne lit aucun exécutable Xbox 360 et ne lance aucun jeu.**
+> **Statut : phase 4 commencée. Un CPU pédagogique (11 instructions) et un début d'interpréteur PowerPC (environ 200 instructions, avec leurs variantes à point (`add.`, qui met à jour le registre de conditions) et à débordement (`addo`) : arithmétique entière avec retenue, logique, décalages, rotations, comparaisons, mémoire de 8 à 64 bits, registre de conditions, sauts conditionnels complets, verrous atomiques, nombres à virgule flottante, instructions de cache et registres système (MSR, base de temps), appels de fonction avec pile) avec assembleur, désassembleur et tests automatiques sont fonctionnels. Ce n'est pas encore un émulateur : il ne lit aucun exécutable Xbox 360 et ne lance aucun jeu.**
 
 *Nerith est un nom de travail provisoire : il peut changer avant la première version publique.*
 

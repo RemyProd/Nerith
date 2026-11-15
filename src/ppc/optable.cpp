@@ -7,43 +7,45 @@ namespace {
 // Les XO de l'opcode 31 sont ceux du manuel PowerPC ; les noms et mots ont ete verifies avec llvm-mc.
 constexpr OpInfo kOps[] = {
     // --- calculs entiers (opcode 31) ---
-    {Kind::Mulhw,   "mulhw",   31, 75,  Layout::RtRaRb},
-    {Kind::Mulhwu,  "mulhwu",  31, 11,  Layout::RtRaRb},
-    {Kind::Mulld,   "mulld",   31, 233, Layout::RtRaRb},
-    {Kind::Divw,    "divw",    31, 491, Layout::RtRaRb},
-    {Kind::Divwu,   "divwu",   31, 459, Layout::RtRaRb},
-    {Kind::Divd,    "divd",    31, 489, Layout::RtRaRb},
-    {Kind::Divdu,   "divdu",   31, 457, Layout::RtRaRb},
-    {Kind::Neg,     "neg",     31, 104, Layout::RtRa},
+    {Kind::Mulhw,   "mulhw",   31, 75,  Layout::RtRaRb, kRc},
+    {Kind::Mulhwu,  "mulhwu",  31, 11,  Layout::RtRaRb, kRc},
+    {Kind::Mulhd,   "mulhd",   31, 73,  Layout::RtRaRb, kRc},
+    {Kind::Mulhdu,  "mulhdu",  31, 9,   Layout::RtRaRb, kRc},
+    {Kind::Mulld,   "mulld",   31, 233, Layout::RtRaRb, kRc | kOe},
+    {Kind::Divw,    "divw",    31, 491, Layout::RtRaRb, kRc | kOe},
+    {Kind::Divwu,   "divwu",   31, 459, Layout::RtRaRb, kRc | kOe},
+    {Kind::Divd,    "divd",    31, 489, Layout::RtRaRb, kRc | kOe},
+    {Kind::Divdu,   "divdu",   31, 457, Layout::RtRaRb, kRc | kOe},
+    {Kind::Neg,     "neg",     31, 104, Layout::RtRa, kRc | kOe},
     // --- logique et decalages (opcode 31) ---
-    {Kind::And,     "and",     31, 28,  Layout::RaRsRb},
-    {Kind::Andc,    "andc",    31, 60,  Layout::RaRsRb},
-    {Kind::Xor,     "xor",     31, 316, Layout::RaRsRb},
-    {Kind::Nor,     "nor",     31, 124, Layout::RaRsRb},
-    {Kind::Nand,    "nand",    31, 476, Layout::RaRsRb},
-    {Kind::Orc,     "orc",     31, 412, Layout::RaRsRb},
-    {Kind::Eqv,     "eqv",     31, 284, Layout::RaRsRb},
-    {Kind::Slw,     "slw",     31, 24,  Layout::RaRsRb},
-    {Kind::Srw,     "srw",     31, 536, Layout::RaRsRb},
-    {Kind::Sld,     "sld",     31, 27,  Layout::RaRsRb},
-    {Kind::Srd,     "srd",     31, 539, Layout::RaRsRb},
-    {Kind::Cntlzw,  "cntlzw",  31, 26,  Layout::RaRs},
-    {Kind::Cntlzd,  "cntlzd",  31, 58,  Layout::RaRs},
-    {Kind::Extsb,   "extsb",   31, 954, Layout::RaRs},
-    {Kind::Extsh,   "extsh",   31, 922, Layout::RaRs},
-    {Kind::Extsw,   "extsw",   31, 986, Layout::RaRs},
+    {Kind::And,     "and",     31, 28,  Layout::RaRsRb, kRc},
+    {Kind::Andc,    "andc",    31, 60,  Layout::RaRsRb, kRc},
+    {Kind::Xor,     "xor",     31, 316, Layout::RaRsRb, kRc},
+    {Kind::Nor,     "nor",     31, 124, Layout::RaRsRb, kRc},
+    {Kind::Nand,    "nand",    31, 476, Layout::RaRsRb, kRc},
+    {Kind::Orc,     "orc",     31, 412, Layout::RaRsRb, kRc},
+    {Kind::Eqv,     "eqv",     31, 284, Layout::RaRsRb, kRc},
+    {Kind::Slw,     "slw",     31, 24,  Layout::RaRsRb, kRc},
+    {Kind::Srw,     "srw",     31, 536, Layout::RaRsRb, kRc},
+    {Kind::Sld,     "sld",     31, 27,  Layout::RaRsRb, kRc},
+    {Kind::Srd,     "srd",     31, 539, Layout::RaRsRb, kRc},
+    {Kind::Cntlzw,  "cntlzw",  31, 26,  Layout::RaRs, kRc},
+    {Kind::Cntlzd,  "cntlzd",  31, 58,  Layout::RaRs, kRc},
+    {Kind::Extsb,   "extsb",   31, 954, Layout::RaRs, kRc},
+    {Kind::Extsh,   "extsh",   31, 922, Layout::RaRs, kRc},
+    {Kind::Extsw,   "extsw",   31, 986, Layout::RaRs, kRc},
     // --- retenue : bit CA du registre XER ---
-    {Kind::Addc,    "addc",    31, 10,  Layout::RtRaRb},
-    {Kind::Adde,    "adde",    31, 138, Layout::RtRaRb},
-    {Kind::Subfc,   "subc",    31, 8,   Layout::RtRbRa},   // subfc rD, rA, rB s'ecrit "subc rD, rB, rA"
-    {Kind::Subfe,   "subfe",   31, 136, Layout::RtRaRb},
-    {Kind::Addze,   "addze",   31, 202, Layout::RtRa},
-    {Kind::Addme,   "addme",   31, 234, Layout::RtRa},
-    {Kind::Subfze,  "subfze",  31, 200, Layout::RtRa},
-    {Kind::Subfme,  "subfme",  31, 232, Layout::RtRa},
-    {Kind::Sraw,    "sraw",    31, 792, Layout::RaRsRb},
-    {Kind::Srad,    "srad",    31, 794, Layout::RaRsRb},
-    {Kind::Srawi,   "srawi",   31, 824, Layout::RaRsSh},
+    {Kind::Addc,    "addc",    31, 10,  Layout::RtRaRb, kRc | kOe},
+    {Kind::Adde,    "adde",    31, 138, Layout::RtRaRb, kRc | kOe},
+    {Kind::Subfc,   "subc",    31, 8,   Layout::RtRbRa, kRc | kOe},   // subfc rD, rA, rB s'ecrit "subc rD, rB, rA"
+    {Kind::Subfe,   "subfe",   31, 136, Layout::RtRaRb, kRc | kOe},
+    {Kind::Addze,   "addze",   31, 202, Layout::RtRa, kRc | kOe},
+    {Kind::Addme,   "addme",   31, 234, Layout::RtRa, kRc | kOe},
+    {Kind::Subfze,  "subfze",  31, 200, Layout::RtRa, kRc | kOe},
+    {Kind::Subfme,  "subfme",  31, 232, Layout::RtRa, kRc | kOe},
+    {Kind::Sraw,    "sraw",    31, 792, Layout::RaRsRb, kRc},
+    {Kind::Srad,    "srad",    31, 794, Layout::RaRsRb, kRc},
+    {Kind::Srawi,   "srawi",   31, 824, Layout::RaRsSh, kRc},
     {Kind::Addic,   "addic",   12, -1,  Layout::RtRaSimm},
     {Kind::AddicDot,"addic.",  13, -1,  Layout::RtRaSimm},
     {Kind::Subfic,  "subfic",  8,  -1,  Layout::RtRaSimm},
@@ -78,46 +80,46 @@ constexpr OpInfo kOps[] = {
     {Kind::Stfdux,  "stfdux",  31, 759, Layout::FMemX},
     {Kind::Stfiwx,  "stfiwx",  31, 983, Layout::FMemX},
     // --- flottants : calculs en double (opcode 63) et en simple (opcode 59), formes "A" : XO de 5 bits ---
-    {Kind::Fdiv,    "fdiv",    63, 18,  Layout::FA3},
-    {Kind::Fsub,    "fsub",    63, 20,  Layout::FA3},
-    {Kind::Fadd,    "fadd",    63, 21,  Layout::FA3},
-    {Kind::Fsqrt,   "fsqrt",   63, 22,  Layout::FA2},
-    {Kind::Fsel,    "fsel",    63, 23,  Layout::FA4},
-    {Kind::Fmul,    "fmul",    63, 25,  Layout::FA3c},
-    {Kind::Frsqrte, "frsqrte", 63, 26,  Layout::FA2},
-    {Kind::Fmsub,   "fmsub",   63, 28,  Layout::FA4},
-    {Kind::Fmadd,   "fmadd",   63, 29,  Layout::FA4},
-    {Kind::Fnmsub,  "fnmsub",  63, 30,  Layout::FA4},
-    {Kind::Fnmadd,  "fnmadd",  63, 31,  Layout::FA4},
-    {Kind::Fdivs,   "fdivs",   59, 18,  Layout::FA3},
-    {Kind::Fsubs,   "fsubs",   59, 20,  Layout::FA3},
-    {Kind::Fadds,   "fadds",   59, 21,  Layout::FA3},
-    {Kind::Fsqrts,  "fsqrts",  59, 22,  Layout::FA2},
-    {Kind::Fres,    "fres",    59, 24,  Layout::FA2},
-    {Kind::Fmuls,   "fmuls",   59, 25,  Layout::FA3c},
-    {Kind::Fmsubs,  "fmsubs",  59, 28,  Layout::FA4},
-    {Kind::Fmadds,  "fmadds",  59, 29,  Layout::FA4},
-    {Kind::Fnmsubs, "fnmsubs", 59, 30,  Layout::FA4},
-    {Kind::Fnmadds, "fnmadds", 59, 31,  Layout::FA4},
+    {Kind::Fdiv,    "fdiv",    63, 18,  Layout::FA3, kRc},
+    {Kind::Fsub,    "fsub",    63, 20,  Layout::FA3, kRc},
+    {Kind::Fadd,    "fadd",    63, 21,  Layout::FA3, kRc},
+    {Kind::Fsqrt,   "fsqrt",   63, 22,  Layout::FA2, kRc},
+    {Kind::Fsel,    "fsel",    63, 23,  Layout::FA4, kRc},
+    {Kind::Fmul,    "fmul",    63, 25,  Layout::FA3c, kRc},
+    {Kind::Frsqrte, "frsqrte", 63, 26,  Layout::FA2, kRc},
+    {Kind::Fmsub,   "fmsub",   63, 28,  Layout::FA4, kRc},
+    {Kind::Fmadd,   "fmadd",   63, 29,  Layout::FA4, kRc},
+    {Kind::Fnmsub,  "fnmsub",  63, 30,  Layout::FA4, kRc},
+    {Kind::Fnmadd,  "fnmadd",  63, 31,  Layout::FA4, kRc},
+    {Kind::Fdivs,   "fdivs",   59, 18,  Layout::FA3, kRc},
+    {Kind::Fsubs,   "fsubs",   59, 20,  Layout::FA3, kRc},
+    {Kind::Fadds,   "fadds",   59, 21,  Layout::FA3, kRc},
+    {Kind::Fsqrts,  "fsqrts",  59, 22,  Layout::FA2, kRc},
+    {Kind::Fres,    "fres",    59, 24,  Layout::FA2, kRc},
+    {Kind::Fmuls,   "fmuls",   59, 25,  Layout::FA3c, kRc},
+    {Kind::Fmsubs,  "fmsubs",  59, 28,  Layout::FA4, kRc},
+    {Kind::Fmadds,  "fmadds",  59, 29,  Layout::FA4, kRc},
+    {Kind::Fnmsubs, "fnmsubs", 59, 30,  Layout::FA4, kRc},
+    {Kind::Fnmadds, "fnmadds", 59, 31,  Layout::FA4, kRc},
     // --- flottants : copies, conversions, comparaisons, FPSCR (opcode 63, formes "X" : XO de 10 bits) ---
     {Kind::Fcmpu,   "fcmpu",   63, 0,   Layout::FCmp},
-    {Kind::Frsp,    "frsp",    63, 12,  Layout::FX2},
-    {Kind::Fctiw,   "fctiw",   63, 14,  Layout::FX2},
-    {Kind::Fctiwz,  "fctiwz",  63, 15,  Layout::FX2},
+    {Kind::Frsp,    "frsp",    63, 12,  Layout::FX2, kRc},
+    {Kind::Fctiw,   "fctiw",   63, 14,  Layout::FX2, kRc},
+    {Kind::Fctiwz,  "fctiwz",  63, 15,  Layout::FX2, kRc},
     {Kind::Fcmpo,   "fcmpo",   63, 32,  Layout::FCmp},
-    {Kind::Mtfsb1,  "mtfsb1",  63, 38,  Layout::BtOnly},
-    {Kind::Fneg,    "fneg",    63, 40,  Layout::FX2},
+    {Kind::Mtfsb1,  "mtfsb1",  63, 38,  Layout::BtOnly, kRc},
+    {Kind::Fneg,    "fneg",    63, 40,  Layout::FX2, kRc},
     {Kind::Mcrfs,   "mcrfs",   63, 64,  Layout::CrfCrf},
-    {Kind::Mtfsb0,  "mtfsb0",  63, 70,  Layout::BtOnly},
-    {Kind::Fmr,     "fmr",     63, 72,  Layout::FX2},
-    {Kind::Mtfsfi,  "mtfsfi",  63, 134, Layout::CrfImm},
-    {Kind::Fnabs,   "fnabs",   63, 136, Layout::FX2},
-    {Kind::Fabs,    "fabs",    63, 264, Layout::FX2},
-    {Kind::Mffs,    "mffs",    63, 583, Layout::FrD},
-    {Kind::Mtfsf,   "mtfsf",   63, 711, Layout::FmFrb},
-    {Kind::Fctid,   "fctid",   63, 814, Layout::FX2},
-    {Kind::Fctidz,  "fctidz",  63, 815, Layout::FX2},
-    {Kind::Fcfid,   "fcfid",   63, 846, Layout::FX2},
+    {Kind::Mtfsb0,  "mtfsb0",  63, 70,  Layout::BtOnly, kRc},
+    {Kind::Fmr,     "fmr",     63, 72,  Layout::FX2, kRc},
+    {Kind::Mtfsfi,  "mtfsfi",  63, 134, Layout::CrfImm, kRc},
+    {Kind::Fnabs,   "fnabs",   63, 136, Layout::FX2, kRc},
+    {Kind::Fabs,    "fabs",    63, 264, Layout::FX2, kRc},
+    {Kind::Mffs,    "mffs",    63, 583, Layout::FrD, kRc},
+    {Kind::Mtfsf,   "mtfsf",   63, 711, Layout::FmFrb, kRc},
+    {Kind::Fctid,   "fctid",   63, 814, Layout::FX2, kRc},
+    {Kind::Fctidz,  "fctidz",  63, 815, Layout::FX2, kRc},
+    {Kind::Fcfid,   "fcfid",   63, 846, Layout::FX2, kRc},
     // --- nombres de 16 bits ---
     {Kind::Mulli,   "mulli",   7,  -1,  Layout::RtRaSimm},
     {Kind::Oris,    "oris",    25, -1,  Layout::RaRsUimm},
@@ -210,21 +212,29 @@ const OpInfo* find_op(const std::string& name) {
 
 const OpInfo* find_op_for_word(std::uint32_t word) {
     const unsigned opcode = word >> 26;
+    const bool rc_bit = (word & 1u) != 0;
     for (const OpInfo& op : kOps) {
         if (op.opcode != opcode) {
             continue;
         }
         if (opcode == 31 || opcode == 19) {
-            if ((word & 1u) == 0 && static_cast<int>((word >> 1) & 0x3FF) == op.xo) {
+            if (rc_bit && (op.flags & kRc) == 0) {   // Rc = 1 n'existe que pour les lignes marquees kRc
+                continue;
+            }
+            unsigned xo = (word >> 1) & 0x3FF;
+            if ((op.flags & kOe) != 0) {
+                xo &= 0x1FF;   // le bit OE (bit 21 du mot) est le bit de poids fort des 10 bits
+            }
+            if (static_cast<int>(xo) == op.xo) {
                 return &op;
             }
         } else if (opcode == 58 || opcode == 62) {
             if (static_cast<int>(word & 3u) == op.xo) {
                 return &op;
             }
-        } else if (opcode == 59 || opcode == 63) {   // flottants : le bit Rc doit valoir 0
+        } else if (opcode == 59 || opcode == 63) {   // flottants : Rc = 1 seulement pour les lignes kRc
             const unsigned xo = is_a_form(op.layout) ? ((word >> 1) & 0x1F) : ((word >> 1) & 0x3FF);
-            if ((word & 1u) == 0 && static_cast<int>(xo) == op.xo) {
+            if ((!rc_bit || (op.flags & kRc) != 0) && static_cast<int>(xo) == op.xo) {
                 return &op;
             }
         } else {

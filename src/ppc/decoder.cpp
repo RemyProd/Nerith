@@ -55,7 +55,10 @@ std::string table_text(const OpInfo& op, const Instruction& i) {
             return name + " " + ra + ", " + rd;
         case Layout::RaRsSh:
             return name + " " + ra + ", " + rd + ", " + std::to_string(i.sh);
-        case Layout::RtRbRa:
+        case Layout::RtRbRa:   // subc rD, rB, rA ; avec OE llvm n'a plus d'alias et ecrit subfc dans l'ordre du mot
+            if (i.oe) {
+                return "subfc " + rd + ", " + ra + ", " + rb;
+            }
             return name + " " + rd + ", " + rb + ", " + ra;
         case Layout::RtRa:
             return name + " " + rd + ", " + ra;
@@ -191,10 +194,11 @@ Instruction decode(std::uint32_t word) {
             result.imm = static_cast<std::int32_t>(word & 0xFFFF);   // nombre sans signe
             break;
 
-        case 20:   // rlwimi (Rc = 0) : insere des bits tournes dans rA ; rd est rS
-        case 23:   // rlwnm (Rc = 0) : comme rlwinm, mais la rotation vient de rB
-            if ((word & 0x1) == 0) {
+        case 20:   // rlwimi : insere des bits tournes dans rA ; rd est rS
+        case 23:   // rlwnm : comme rlwinm, mais la rotation vient de rB
+            {
                 result.kind = opcode_of(word) == 20 ? Kind::Rlwimi : Kind::Rlwnm;
+                result.rc = (word & 0x1) != 0;
                 result.rd = field_6_10(word);
                 result.ra = field_11_15(word);
                 if (result.kind == Kind::Rlwimi) {
@@ -207,17 +211,24 @@ Instruction decode(std::uint32_t word) {
             }
             break;
 
-        case 30:   // rotations 64 bits (forme MD) : rldicl, rldicr, rldic, rldimi ; Rc = 0
-            if ((word & 0x1) == 0 && ((word >> 2) & 0x7) < 4) {
-                static const Kind kKinds[] = {Kind::Rldicl, Kind::Rldicr, Kind::Rldic, Kind::Rldimi};
-                result.kind = kKinds[(word >> 2) & 0x7];
+        case 30:   // rotations 64 bits : forme MD (rldicl, rldicr, rldic, rldimi) et forme MDS (rldcl, rldcr)
+            if (((word >> 2) & 0x7) <= 4) {
+                static const Kind kKinds[] = {Kind::Rldicl, Kind::Rldicr, Kind::Rldic, Kind::Rldimi, Kind::Rldcl};
+                const unsigned form = (word >> 2) & 0x7;
+                result.kind = form == 4 ? (((word >> 1) & 1u) == 0 ? Kind::Rldcl : Kind::Rldcr) : kKinds[form];
+                result.rc = (word & 0x1) != 0;
                 result.rd = field_6_10(word);
                 result.ra = field_11_15(word);
-                // sh : 6 bits, le bit de poids fort est tout a droite (bit 30) ; mb/me : 6 bits "retournes"
-                result.sh = static_cast<std::uint8_t>((((word >> 1) & 0x1) << 5) | field_16_20(word));
+                // mb/me : 6 bits "retournes"
                 const unsigned raw = (word >> 5) & 0x3F;
                 const std::uint8_t mask_bit = static_cast<std::uint8_t>(((raw & 1u) << 5) | (raw >> 1));
-                if (result.kind == Kind::Rldicr) {
+                if (form == 4) {   // rldcl / rldcr : la rotation vient de rB (bits 16-20)
+                    result.rb = field_16_20(word);
+                } else {
+                    // sh : 6 bits, le bit de poids fort est tout a droite (bit 30)
+                    result.sh = static_cast<std::uint8_t>((((word >> 1) & 0x1) << 5) | field_16_20(word));
+                }
+                if (result.kind == Kind::Rldicr || result.kind == Kind::Rldcr) {
                     result.me = mask_bit;
                 } else {
                     result.mb = mask_bit;
@@ -252,9 +263,10 @@ Instruction decode(std::uint32_t word) {
             result.link = (word & 0x1) != 0;
             break;
 
-        case 21:   // rlwinm : seulement la forme Rc = 0 ; rd est rS, ra est la destination
-            if ((word & 0x1) == 0) {
+        case 21:   // rlwinm ; rd est rS, ra est la destination
+            {
                 result.kind = Kind::Rlwinm;
+                result.rc = (word & 0x1) != 0;
                 result.rd = field_6_10(word);
                 result.ra = field_11_15(word);
                 result.sh = field_16_20(word);
@@ -366,16 +378,30 @@ Instruction decode(std::uint32_t word) {
             }
             break;
 
-        case 31:   // instructions "registre, registre" : seulement les formes simples (Rc = 0)
-            if ((word & 0x1) == 0) {
+        case 31: {   // instructions "registre, registre"
+            const std::uint32_t xo10 = (word >> 1) & 0x3FF;   // champ XO ; son bit de poids fort est le bit OE
+            const std::uint32_t xo9 = xo10 & 0x1FF;
+            if (xo9 == 266 || xo9 == 40 || xo9 == 235 || xo10 == 444 || xo10 == 826 || xo10 == 827) {
+                // add, subf, mullw (OE possible), or, sradi : le bit Rc peut valoir 1
+                result.rc = (word & 0x1) != 0;
                 result.rd = field_6_10(word);
                 result.ra = field_11_15(word);
                 result.rb = field_16_20(word);
-                switch ((word >> 1) & 0x3FF) {   // champ XO (avec le bit OE : on refuse OE = 1)
-                    case 266: result.kind = Kind::Add;   break;
-                    case 40:  result.kind = Kind::Sub;   break;
-                    case 235: result.kind = Kind::Mullw; break;
-                    case 444: result.kind = Kind::Or;    break;
+                if (xo10 == 444) {
+                    result.kind = Kind::Or;
+                } else if (xo10 == 826 || xo10 == 827) {   // sradi : l'opcode etendu a 9 bits vaut 413, et le bit 30 est le bit de poids fort de SH
+                    result.kind = Kind::Sradi;
+                    result.sh = static_cast<std::uint8_t>(((word >> 1) & 1u) << 5 | field_16_20(word));
+                    result.rb = 0;
+                } else {
+                    result.kind = xo9 == 266 ? Kind::Add : (xo9 == 40 ? Kind::Sub : Kind::Mullw);
+                    result.oe = (xo10 & 0x200u) != 0;
+                }
+            } else if ((word & 0x1) == 0) {   // les autres : seulement Rc = 0
+                result.rd = field_6_10(word);
+                result.ra = field_11_15(word);
+                result.rb = field_16_20(word);
+                switch (xo10) {
                     case 23:  result.kind = Kind::Lwzx;  break;
                     case 151: result.kind = Kind::Stwx;  break;
                     case 87:  result.kind = Kind::Lbzx;  break;
@@ -451,12 +477,6 @@ Instruction decode(std::uint32_t word) {
                             result.rd = 0;
                         }
                         break;
-                    case 826:   // sradi : l'opcode etendu a 9 bits vaut 413, et le bit 30 est le bit de poids fort de SH
-                    case 827:
-                        result.kind = Kind::Sradi;
-                        result.sh = static_cast<std::uint8_t>(((word >> 1) & 1u) << 5 | field_16_20(word));
-                        result.rb = 0;
-                        break;
                     case 19:    // mfcr (FXM = 0) ou mfocrf (bit 11 = 1, FXM = champ choisi)
                     case 144:   // mtcrf (bit 11 = 0) ou mtocrf (bit 11 = 1)
                         if ((word & 0x800u) == 0) {
@@ -515,7 +535,12 @@ Instruction decode(std::uint32_t word) {
                 result.ra = field_11_15(word);
                 result.rb = field_16_20(word);
             }
+            if (result.kind == Kind::Unknown) {
+                result = Instruction{};
+                result.word = word;
+            }
             break;
+        }
 
         default:
             break;
@@ -528,6 +553,8 @@ Instruction decode(std::uint32_t word) {
                 result = Instruction{};
                 result.word = word;
                 result.kind = op->kind;
+                result.rc = (op->flags & kRc) != 0 && (word & 1u) != 0;
+                result.oe = (op->flags & kOe) != 0 && (word & 0x400u) != 0;
                 result.rd = field_6_10(word);
                 result.ra = field_11_15(word);
                 switch (op->layout) {
@@ -600,7 +627,9 @@ Instruction decode(std::uint32_t word) {
     return result;
 }
 
-std::string to_text(const Instruction& i) {
+namespace {
+
+std::string base_text(const Instruction& i) {
     if (const OpInfo* op = find_op(i.kind)) {
         return table_text(*op, i);
     }
@@ -687,9 +716,17 @@ std::string to_text(const Instruction& i) {
             }
             return "rldicl " + a + std::to_string(i.sh) + ", " + std::to_string(i.mb);
         }
+        case Kind::Rldcl:
+        case Kind::Rldcr: {
+            const std::string a = reg_name(i.ra) + ", " + reg_name(i.rd) + ", " + reg_name(i.rb);
+            if (i.kind == Kind::Rldcl) {
+                return i.mb == 0 ? "rotld " + a : "rldcl " + a + ", " + std::to_string(i.mb);
+            }
+            return "rldcr " + a + ", " + std::to_string(i.me);
+        }
         case Kind::Rldicr: {
             const std::string a = reg_name(i.ra) + ", " + reg_name(i.rd) + ", ";
-            if (i.sh + i.me == 63) {
+            if (i.sh + i.me == 63 && !i.rc) {   // pas d'alias "sldi." chez llvm
                 return "sldi " + a + std::to_string(i.sh);
             }
             return "rldicr " + a + std::to_string(i.sh) + ", " + std::to_string(i.me);
@@ -713,7 +750,10 @@ std::string to_text(const Instruction& i) {
             }
             return "addis " + reg_name(i.rd) + ", " + reg_name(i.ra) + ", " + std::to_string(i.imm);
 
-        case Kind::Sub:   // rD = rB - rA dans le mot : on ecrit "sub rD, rB, rA"
+        case Kind::Sub:   // rD = rB - rA dans le mot : on ecrit "sub rD, rB, rA" (avec OE : "subfo rD, rA, rB", comme llvm)
+            if (i.oe) {
+                return "subf " + reg_name(i.rd) + ", " + reg_name(i.ra) + ", " + reg_name(i.rb);
+            }
             return "sub " + reg_name(i.rd) + ", " + reg_name(i.rb) + ", " + reg_name(i.ra);
 
         case Kind::Mullw:
@@ -725,10 +765,10 @@ std::string to_text(const Instruction& i) {
             if (i.sh == 0 && i.me == 31 && i.mb > 0) {
                 return "clrlwi " + a + std::to_string(i.mb);
             }
-            if (i.mb == 0 && i.me == 31 - i.sh) {
+            if (i.mb == 0 && i.me == 31 - i.sh && !i.rc) {   // llvm n'a pas d'alias "slwi." ni "srwi." (avec point)
                 return "slwi " + a + std::to_string(i.sh);
             }
-            if (i.me == 31 && i.mb > 0 && i.sh == 32 - i.mb) {
+            if (i.me == 31 && i.mb > 0 && i.sh == 32 - i.mb && !i.rc) {
                 return "srwi " + a + std::to_string(i.mb);
             }
             if (i.mb == 0 && i.me == 31) {
@@ -880,6 +920,22 @@ std::string to_text(const Instruction& i) {
     std::ostringstream out;
     out << ".long 0x" << std::hex << std::setw(8) << std::setfill('0') << i.word;
     return out.str();
+}
+
+}  // namespace
+
+std::string to_text(const Instruction& i) {
+    std::string text = base_text(i);
+    if (i.rc || i.oe) {   // le suffixe se glisse apres le nom : "add" -> "addo." ; "mr r3, r4" -> "mr. r3, r4"
+        const std::string suffix = std::string(i.oe ? "o" : "") + (i.rc ? "." : "");
+        const std::size_t space = text.find(' ');
+        if (space == std::string::npos) {
+            text += suffix;
+        } else {
+            text.insert(space, suffix);
+        }
+    }
+    return text;
 }
 
 }  // namespace nerith::ppc

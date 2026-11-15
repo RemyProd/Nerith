@@ -259,7 +259,8 @@ int main() {
 
     // --- formes refusees ---
     {
-        check(nerith::ppc::decode(0xFC22182B).kind == nerith::ppc::Kind::Unknown, "fadd. (Rc = 1) : pas gere");
+        check(nerith::ppc::decode(0xFC22182B).kind == nerith::ppc::Kind::Fadd && nerith::ppc::decode(0xFC22182B).rc, "fadd. (Rc = 1) : decode");
+        check(nerith::ppc::decode(0xFC011001).kind == nerith::ppc::Kind::Unknown, "fcmpu avec Rc = 1 : refuse");
         check(nerith::ppc::decode(0xFC2218EA).kind == nerith::ppc::Kind::Unknown, "fadd avec frC non nul : invalide");
         check(nerith::ppc::decode(0xFC211090).kind == nerith::ppc::Kind::Unknown, "fmr avec frA non nul : invalide");
     }

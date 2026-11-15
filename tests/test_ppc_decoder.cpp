@@ -30,18 +30,26 @@ int main() {
             ++failures;
         }
     }
-    {   // formes pas gerees : Rc = 1, OE = 1, ou champ reserve non nul
+    {   // les bits Rc (point) et OE ("o") : decodes, et refuses la ou ils n'existent pas
         using nerith::ppc::decode;
         using nerith::ppc::Kind;
-        check(decode(0x7C832839).kind == Kind::Unknown, "and. (Rc = 1) pas gere");
-        check(decode(0x7C6429D3).kind == Kind::Unknown, "mulld. (Rc = 1) pas gere");
-        check(decode(0x7C642DD6).kind == Kind::Unknown, "divw avec OE = 1 : pas gere");
-        check(decode(0x7C6400D0).kind == Kind::Neg, "neg r3, r4");
+        check(decode(0x7C832839).kind == Kind::And && decode(0x7C832839).rc, "and. : Rc = 1");
+        check(decode(0x7C6429D3).kind == Kind::Mulld && decode(0x7C6429D3).rc && !decode(0x7C6429D3).oe, "mulld. : Rc = 1, OE = 0");
+        check(decode(0x7C642FD6).kind == Kind::Divw && decode(0x7C642FD6).oe && !decode(0x7C642FD6).rc, "divwo : OE = 1, Rc = 0");
+        check(decode(0x7C642FD7).kind == Kind::Divw && decode(0x7C642FD7).oe && decode(0x7C642FD7).rc, "divwo. : OE = 1 et Rc = 1");
+        check(decode(0x7C6400D0).kind == Kind::Neg && !decode(0x7C6400D0).rc, "neg r3, r4");
         check(decode(0x7C6428D0).kind == Kind::Unknown, "neg avec rB non nul : reserve");
-        check(decode(0x7C830035).kind == Kind::Unknown, "cntlzw. (Rc = 1) pas gere");
-        check(decode(0x7C8307B5).kind == Kind::Unknown, "extsw. (Rc = 1) pas gere");
-        check(decode(0x788329C1).kind == Kind::Unknown, "rldicl. (Rc = 1) pas gere");
-        check(decode(0x508329D9).kind == Kind::Unknown, "rlwimi. (Rc = 1) pas gere");
+        check(decode(0x7C830035).kind == Kind::Cntlzw && decode(0x7C830035).rc, "cntlzw. : Rc = 1");
+        check(decode(0x7C8307B5).kind == Kind::Extsw && decode(0x7C8307B5).rc, "extsw. : Rc = 1");
+        check(decode(0x788329C1).kind == Kind::Rldicl && decode(0x788329C1).rc, "rldicl. : Rc = 1");
+        check(decode(0x508329D9).kind == Kind::Rlwimi && decode(0x508329D9).rc, "rlwimi. : Rc = 1");
+        check(decode(0x7C642A15).kind == Kind::Add && decode(0x7C642A15).rc && !decode(0x7C642A15).oe, "add. : Rc = 1");
+        check(decode(0x7C642E14).kind == Kind::Add && decode(0x7C642E14).oe && !decode(0x7C642E14).rc, "addo : OE = 1");
+        // refus : mulhw n'a pas de bit OE, et les comparaisons, chargements et sauts n'ont pas de bit Rc
+        check(decode(0x7C642C96).kind == Kind::Unknown, "mulhw avec OE = 1 : refuse");
+        check(decode(0x7C642897).kind == Kind::Mulhw && decode(0x7C642897).rc, "mulhw. : Rc = 1 permis");
+        check(decode(0x7C032801).kind == Kind::Unknown, "cmpw avec Rc = 1 : refuse");
+        check(decode(0x4C0000A5).kind == Kind::Unknown, "crxor-like avec Rc = 1 : refuse");
     }
     using namespace nerith::ppc;
 
@@ -99,7 +107,7 @@ int main() {
     check(decode(0x7C64282F).kind == Kind::Unknown, "lwzx. (Rc = 1) n'existe pas");
     check(text(0x3C608200) == "lis r3, 0x8200", "lis");
     check(text(0x3C640001) == "addis r3, r4, 1", "addis");
-    check(decode(0x7C652051).kind == Kind::Unknown, "sub. (Rc = 1) pas encore gere");
+    check(text(0x7C652051) == "sub. r3, r4, r5", "sub. : Rc = 1");
     check(text(0x7C232000) == "cmpd r3, r4", "cmpd");
     check(text(0x7CA42800) == "cmpd cr1, r4, r5", "cmpd cr1");
     check(text(0xE8610008) == "ld r3, 8(r1)", "ld");
@@ -129,7 +137,7 @@ int main() {
         check(r.kind == Kind::Rlwinm && r.rd == 4 && r.ra == 3 && r.sh == 5 && r.mb == 6 && r.me == 7,
               "rlwinm : champs (rS = 4, rA = 3)");
     }
-    check(decode(0x5483402F).kind == Kind::Unknown, "rlwinm. (Rc = 1) pas encore gere");
+    check(text(0x5483402F) == "rlwinm. r3, r4, 8, 0, 23", "rlwinm. : Rc = 1");
 
     // CTR, boucles et sauts indirects (mots verifies avec llvm-mc)
     check(text(0x7C6903A6) == "mtctr r3", "mtctr");
@@ -145,7 +153,7 @@ int main() {
     // mots non reconnus : jamais d'exception
     check(decode(0x00000000).kind == Kind::Unknown, "0 : inconnu");
     check(text(0x12345678) == ".long 0x12345678", "texte : inconnu");
-    check(decode(0x7C632215).kind == Kind::Unknown, "add. (Rc = 1) pas encore gere");
+    check(text(0x7C632215) == "add. r3, r3, r4", "add. : Rc = 1");
 
     if (failures == 0) {
         std::cout << "Tous les tests du decodeur PowerPC passent\n";
