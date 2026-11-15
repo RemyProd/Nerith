@@ -70,7 +70,7 @@ src/<module>/              code du module
 | `util` | Lecture de fichiers (`file.h`), logs (`log.h`) | rien |
 | `memory` | Classe `Memory` : octets, big-endian, accès vérifiés | rien |
 | `toy` | CPU pédagogique (`cpu.h`), assembleur, désassembleur | `memory` |
-| `ppc` | CPU PowerPC : décodeur, désassembleur, assembleur, interpréteur, table d'instructions (`nerith::ppc`) | `memory` |
+| `ppc` | CPU PowerPC : décodeur, désassembleur, assembleur, interpréteur, table d'instructions, instructions vectorielles AltiVec/VMX128 (`vmx.cpp`, `cpu_vmx.cpp`) (`nerith::ppc`) | `memory` |
 | `xex` | Lecture de l'en-tête d'un fichier XEX (exécutable Xbox 360), sans déchiffrement (`nerith::xex`) | rien |
 
 L'exécutable `nerith` (`src/main.cpp`) utilise `toy`, `ppc`, `xex` et `util` (option `--ppc` pour le PowerPC, option `--xex` pour lire un en-tête XEX). Chaque test n'est lié qu'au module qu'il vérifie.

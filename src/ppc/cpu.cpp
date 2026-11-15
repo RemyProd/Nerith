@@ -7,6 +7,7 @@
 #include <stdexcept>
 
 #include "nerith/ppc/decoder.h"
+#include "nerith/ppc/vmx_exec.h"
 
 namespace nerith::ppc {
 
@@ -709,6 +710,10 @@ Status execute_decoded(const Instruction& i, Cpu& cpu, Memory& memory) {
     try {
         const std::uint64_t next = cpu.pc + 4;
 
+        if (i.kind == Kind::Vector) {
+            return execute_vector(i, cpu, memory);
+        }
+
         MemOp mem{};
         if (mem_op_of(i.kind, mem)) {
             return do_memory(i, mem, cpu, memory, next);
@@ -1241,7 +1246,7 @@ Status step_inner(Cpu& cpu, Memory& memory) {
     if (i.oe) {   // OV prend la valeur du dernier calcul ; SO est "collant" : il reste a 1 une fois pose
         cpu.xer = overflow ? (cpu.xer | kXerOv | kXerSo) : (cpu.xer & ~kXerOv);
     }
-    if (i.rc) {
+    if (i.rc && i.kind != Kind::Vector) {   // (les comparaisons vectorielles mettent a jour CR6 elles-memes)
         const int target = result_register(i);
         if (target >= 0) {   // entiers : CR0 = comparaison du resultat (64 bits, avec signe) a 0
             set_cr_field(cpu, 0, static_cast<std::int64_t>(cpu.gpr[target]), 0);

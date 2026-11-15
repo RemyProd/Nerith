@@ -429,7 +429,7 @@ int main() {
     }
     {   // erreurs : rien ne change
         Memory memory(8);
-        memory.write32(0, 0x12345678);
+        memory.write32(0, 0x04345678);
         Cpu cpu;
         check(step(cpu, memory) == Status::InvalidInstruction && cpu.pc == 0, "instruction inconnue");
 

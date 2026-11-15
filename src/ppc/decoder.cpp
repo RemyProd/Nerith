@@ -1,4 +1,5 @@
 #include "nerith/ppc/decoder.h"
+#include "nerith/ppc/vmx_codec.h"
 
 #include <iomanip>
 #include <sstream>
@@ -624,12 +625,23 @@ Instruction decode(std::uint32_t word) {
             }
         }
     }
+    // AltiVec et VMX128 (vmx.cpp)
+    if (result.kind == Kind::Unknown) {
+        Instruction vector;
+        if (decode_vector(word, vector)) {
+            result = vector;
+        }
+    }
+
     return result;
 }
 
 namespace {
 
 std::string base_text(const Instruction& i) {
+    if (i.kind == Kind::Vector) {
+        return vector_text(i);
+    }
     if (const OpInfo* op = find_op(i.kind)) {
         return table_text(*op, i);
     }
@@ -926,7 +938,7 @@ std::string base_text(const Instruction& i) {
 
 std::string to_text(const Instruction& i) {
     std::string text = base_text(i);
-    if (i.rc || i.oe) {   // le suffixe se glisse apres le nom : "add" -> "addo." ; "mr r3, r4" -> "mr. r3, r4"
+    if ((i.rc || i.oe) && i.kind != Kind::Vector) {   // le suffixe se glisse apres le nom : "add" -> "addo." ; "mr r3, r4" -> "mr. r3, r4"
         const std::string suffix = std::string(i.oe ? "o" : "") + (i.rc ? "." : "");
         const std::size_t space = text.find(' ');
         if (space == std::string::npos) {

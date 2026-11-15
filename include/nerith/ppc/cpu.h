@@ -29,6 +29,10 @@ struct Cpu {
     std::uint32_t dec = 0;                   // SPR 22 : decompteur, diminue de 1 par instruction executee
     std::uint32_t pvr = 0;                   // SPR 287 : version du processeur, lecture seule (valeur du vrai Xenon a verifier)
     std::uint64_t tb = 0;                    // base de temps (mftb) : augmente de 1 par instruction executee
+
+    // Registres vectoriels (AltiVec / VMX128) : 128 registres de 128 bits. Un registre = 4 mots de 32 bits, le mot 0 est celui de poids FORT.
+    std::array<std::array<std::uint32_t, 4>, 128> vr{};
+    std::uint32_t vscr = 0;                  // etat vectoriel : SAT (bit 0) = une saturation a eu lieu ; NJ (bit 16) n'est pas utilise
 };
 
 // Dans CR, le champ n (0 a 7) occupe 4 bits ; le champ 0 est tout a gauche (bits de poids fort).

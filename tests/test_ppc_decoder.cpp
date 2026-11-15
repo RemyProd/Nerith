@@ -152,7 +152,7 @@ int main() {
 
     // mots non reconnus : jamais d'exception
     check(decode(0x00000000).kind == Kind::Unknown, "0 : inconnu");
-    check(text(0x12345678) == ".long 0x12345678", "texte : inconnu");
+    check(text(0x04345678) == ".long 0x04345678", "texte : inconnu");
     check(text(0x7C632215) == "add. r3, r3, r4", "add. : Rc = 1");
 
     if (failures == 0) {

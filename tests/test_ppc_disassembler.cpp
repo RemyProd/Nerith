@@ -36,8 +36,8 @@ int main() {
     }
     {   // mot inconnu
         Memory memory(8);
-        memory.write32(0, 0x12345678);
-        check(ppc::disassemble_range(memory, 0, 1) == "00000000  12345678  .long 0x12345678\n",
+        memory.write32(0, 0x04345678);
+        check(ppc::disassemble_range(memory, 0, 1) == "00000000  04345678  .long 0x04345678\n",
               "disassemble_range : mot inconnu");
     }
     {   // lecture hors de la memoire : refusee

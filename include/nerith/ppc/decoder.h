@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <string>
 
+#include "nerith/ppc/vmx.h"
+
 namespace nerith::ppc {
 
 // Les instructions PowerPC que le decodeur reconnait pour l'instant.
@@ -84,6 +86,9 @@ enum class Kind {
 
     // multiplications hautes 64 bits et rotations 64 bits dont la rotation vient d'un registre
     Mulhd, Mulhdu, Rldcl, Rldcr,
+
+    // AltiVec / VMX128 (voir vmx.h) : le detail est dans Instruction::vop
+    Vector,
 };
 
 // Le resultat du decodage d'un mot de 32 bits.
@@ -106,6 +111,8 @@ struct Instruction {
                               //                     4 = pas de decrement de CTR, 2 = saute si CTR vaut 0)
     std::uint8_t bi = 0;      // Bc... : numero du bit de CR teste (0 a 31 ; champ = bi / 4) ; Mcrf : champ source
     bool rc = false;          // bit Rc (bit 31) : le resultat met a jour CR0 (entiers) ou CR1 (flottants) ; le nom prend un "."
+    VecOp vop = VecOp::None;           // Kind::Vector : quelle operation vectorielle (rd = vD, ra = vA ou rA, rb = vB ou rB, frc = vC)
+    const VecInfo* vec = nullptr;      // Kind::Vector : la ligne de la table (nom, forme)
     bool oe = false;          // bit OE (bit 21) : l'overflow met a jour XER.OV et XER.SO ; le nom prend un "o"
 };
 

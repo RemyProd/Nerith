@@ -1,4 +1,5 @@
 #include "nerith/ppc/assembler.h"
+#include "nerith/ppc/vmx_codec.h"
 
 #include <cctype>
 #include <map>
@@ -862,6 +863,14 @@ std::uint32_t encode_base(const Line& line, const std::map<std::string, std::siz
 // Encode une ligne. Si le mnemonique est inconnu, essaie la forme avec point (Rc = 1) et/ou "o" (OE = 1) :
 // "add." = add + bit 31, "addo" = add + bit 21, "addo." = les deux. Le decodeur dit si cette variante existe.
 std::uint32_t encode(const Line& line, const std::map<std::string, std::size_t>& labels) {
+    try {
+        std::uint32_t vector_word = 0;
+        if (assemble_vector(line.mnemonic, line.operands, vector_word)) {
+            return vector_word;
+        }
+    } catch (const std::invalid_argument& e) {
+        throw AssemblyError(line.number, e.what());
+    }
     try {
         return encode_base(line, labels);
     } catch (const UnknownInstruction&) {
