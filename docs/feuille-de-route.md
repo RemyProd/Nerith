@@ -54,8 +54,8 @@ Voir [Architecture](architecture.md).
 - [ ] Étudier registres et modes d'exécution.
 - [ ] Étudier les instructions nécessaires.
 - [ ] Concevoir un interpréteur de référence. (commencé : module `ppc`, D-013)
-- [ ] Tester chaque instruction. (fait pour les instructions déjà gérées)
-- [ ] Étudier les extensions vectorielles.
+- [ ] Tester chaque instruction. (fait pour les instructions déjà gérées, y compris les premières instructions vectorielles)
+- [ ] Étudier les extensions vectorielles. (commencé : registres v0-v127, chargements, flottants, logique, permutations, conversions ; manque la partie entière d'AltiVec)
 - [ ] Évaluer ultérieurement un JIT.
 
 ## Phase 5 — Mémoire et périphériques
